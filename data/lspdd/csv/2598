@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 590 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+589,0.0
+590,1.0
+591,0.0

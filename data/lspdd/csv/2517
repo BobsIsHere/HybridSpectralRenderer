@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 460 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+459,0.0
+460,1.0
+461,0.0

@@ -279,7 +279,7 @@ void write_mesh_buffer(void* buffer_data, uint32_t buffer_index, VkDeviceSize bu
 }
 
 
-int load_scene(scene_t* scene, const device_t* device, const char* file_path, const char* texture_path) {
+int load_scene(scene_t* scene, const device_t* device, const char* file_path, const char* texture_path, const char* texture_suffixes[material_texture_type_count]) {
 	memset(scene, 0, sizeof(*scene));
 	scene_loader_t loader = { .scene = scene, .device = device };
 	// Open the source file
@@ -377,13 +377,9 @@ int load_scene(scene_t* scene, const device_t* device, const char* file_path, co
 	// Load textures
 	VkDeviceSize texture_count = scene->header.material_count * material_texture_type_count;
 	char** texture_file_paths = calloc(texture_count, sizeof(char*));
-	const char* suffixes[material_texture_type_count];
-	suffixes[material_texture_type_base_color] = "_BaseColor.vkt";
-	suffixes[material_texture_type_specular] = "_Specular.vkt";
-	suffixes[material_texture_type_normal] = "_Normal.vkt";
 	for (VkDeviceSize i = 0; i != scene->header.material_count; ++i) {
 		for (uint32_t j = 0; j != material_texture_type_count; ++j) {
-			const char* parts[] = { texture_path, "/", scene->header.material_names[i], suffixes[j] };
+			const char* parts[] = { texture_path, "/", scene->header.material_names[i], texture_suffixes[j] };
 			texture_file_paths[i * material_texture_type_count + j] = cat_strings(parts, COUNT_OF(parts));
 		}
 	}

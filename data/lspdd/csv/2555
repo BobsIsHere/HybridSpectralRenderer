@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 550 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+549,0.0
+550,1.0
+551,0.0

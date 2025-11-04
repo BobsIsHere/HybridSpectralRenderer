@@ -20,6 +20,7 @@
 //! An enumeration of available scenes (i.e. *.vks files)
 typedef enum {
 	scene_file_bistro_outside,
+	scene_file_bistro_outside_1_light,
 	scene_file_cornell_box,
 	scene_file_arcade,
 	scene_file_attic,
@@ -35,17 +36,17 @@ typedef enum {
 typedef enum {
 	//! Simply convert the linear radiance values to sRGB, clamping channels
 	//! that are above 1
-	tonemapper_clamp,
+	tonemapper_op_clamp,
 	//! The tonemapper from the Academy Color Encoding System
-	tonemapper_aces,
+	tonemapper_op_aces,
 	//! The Khronos PBR neutral tone mapper as documented here:
 	//! https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/README.md
-	tonemapper_khronos_pbr_neutral,
+	tonemapper_op_khronos_pbr_neutral,
 	//! The number of available tonemapping operators
-	tonemapper_count,
+	tonemapper_op_count,
 	//! Used to force an int32_t
-	tonemapper_force_int_32 = 0x7fffffff,
-} tonemapper_t;
+	tonemapper_op_force_int_32 = 0x7fffffff,
+} tonemapper_op_t;
 
 
 
@@ -58,19 +59,19 @@ typedef struct {
 	//! The camera used to observe the scene
 	camera_t camera;
 	//! The tonemapping operator used to present colors
-	tonemapper_t tonemapper;
+	tonemapper_op_t tonemapper;
 	//! The factor by which HDR radiance is scaled during tonemapping
 	float exposure;
+	//! How much white should be mixed into the color (without changing the
+	//! luminance) prior to tonemapping. This is lazy gamut compression.
+	float white_weight;
 	//! The index of the frame being rendered for the purpose of random seed
 	//! generation
 	uint32_t frame_index;
-	//! The color of the sky (using Rec. 709, a.k.a. linear sRGB)
-	float sky_color[3];
-	//! A factor applied to the sky color to get radiance
-	float sky_strength;
-	//! The color of light emitted by the material called _emission (Rec. 709)
-	float emission_material_color[3];
-	//! A factor applied to the emission color to get radiance
+	//! The index of the LSPDD illuminant spectrum used for emission of the
+	//! material called _emission
+	uint32_t emission_material_spectrum_id;
+	//! A factor applied to the emission spectrum to get radiance
 	float emission_material_strength;
 	//! Four floats that can be controlled from the GUI directly and can be
 	//! used for any purpose while developing shaders
@@ -78,27 +79,27 @@ typedef struct {
 } scene_spec_t;
 
 
-//! Different sampling strategies to use in a path tracer. More detailed
-//! documentation is available in the path_trace_*() functions in the shader.
+//! The set of techniques used to perform color computations
 typedef enum {
-	//! Sampling of the hemisphere by choosing spherical coordinates uniformly
-	sampling_strategy_spherical,
-	//! Projected-solid angle sampling in the whole hemisphere
-	sampling_strategy_psa,
-	//! BRDF sampling
-	sampling_strategy_brdf,
-	//! Next event estimation
-	sampling_strategy_nee,
-	//! The number of different sampling strategies
-	sampling_strategy_count,
-} sampling_strategy_t;
+	//! All spectra are described by RGB triples and multiplied component-wise
+	//! when evaluating the rendering equation
+	color_model_rgb,
+	//! Illuminant spectra are densely sampled, reflectance spectra are
+	//! described using Fourier sRGB and the bounded MESE.
+	color_model_spectral,
+	//! Number of different ways to handle color
+	color_model_count,
+} color_model_t;
 
 
 //! A specification of all the techniques and parameters used to render the
 //! scene without specifying the scene itself
 typedef struct {
-	//! The sampling strategy to use for path tracing
-	sampling_strategy_t sampling_strategy;
+	//! How color is being handled
+	color_model_t color_model;
+	//! The number of wavelengths that are being sampled for integration across
+	//! the wavelength domain
+	uint32_t wavelength_sample_count;
 	//! The maximal number of vertices along a path, excluding the one at the
 	//! eye
 	uint32_t path_length;
@@ -111,9 +112,11 @@ typedef enum {
 	image_file_format_png,
 	//! Joint Photographic Experts Group (JPEG) using 3*8-bit RGB
 	image_file_format_jpg,
+	//! High-dynamic range image with shared exponent format
+	image_file_format_hdr,
 	//! High-dynamic range image with 3*32-bit RGB using single-precision
 	//! floats
-	image_file_format_hdr,
+	image_file_format_pfm,
 } image_file_format_t;
 
 
@@ -133,6 +136,10 @@ typedef struct {
 		taken. This essentially controls the sample count. After the screenshot
 		the slideshow advances to the next slide.*/
 	uint32_t screenshot_frame;
+	//! Overrides for the respective attributes in scene_spec_t or 0 to
+	//! indicate no change
+	uint32_t emission_material_spectrum_id;
+	float emission_material_strength, white_weight;
 } slide_t;
 
 
@@ -244,13 +251,11 @@ typedef struct {
 	float dequantization_factor[3], pad_2, dequantization_summand[3], pad_3;
 	float viewport_size[2], inv_viewport_size[2];
 	float exposure;
+	float white_weight;
 	uint32_t frame_index;
 	uint32_t accum_frame_count;
-	float pad_4;
-	float sky_radiance[3];
-	float pad_5;
 	float emission_material_radiance[3];
-	float pad_6;
+	float emission_spectrum_integral;
 	float params[4];
 	float spherical_lights[MAX_SPHERICAL_LIGHT_COUNT][4];
 } constants_t;
@@ -269,6 +274,38 @@ typedef struct {
 	//! frame, data from the appropriate staging buffer is copied over.
 	buffers_t buffer;
 } constant_buffers_t;
+
+
+//! A description of an illuminant spectrum that is useful for importance
+//! sampling. An illuminant spectrum maps wavelength to radiant flux.
+typedef struct {
+	//! The file path from which this spectrum has been loaded
+	char* file_path;
+	//! The file handle from which the spectrum is being loaded. NULL once
+	//! loading has concluded.
+	FILE* file;
+	//! The name of this illuminant spectrum (null-terminated)
+	char name[256];
+	//! The color of the spectrum in linear sRGB (Rec. 709). The assumption is
+	//! that the spectrum is for an illuminant, so D65 is not applied.
+	float rgb_color[3];
+	//! The integral w.r.t. wavelength over the spectrum
+	float integral;
+	/*! A 4-channel 1D texture that aids in importance sampling of a spectrum.
+		It is queried with a uniform random number between 0 and 1. The texture
+		essentially holds an inverse CDF of the sampled density, such that the
+		sampled value corresponds to a wavelength distributed in proportion to
+		this density. The density combines the radiant power of the spectrum at
+		each wavelength with the color matching functions. The RGB-channels
+		hold the linear sRGB (Rec. 709) color for monochromatic emission at the
+		wavelength, divided by the density. Note that some entries may be
+		negative or greater than one, because these are the most saturated
+		colors that are physically possible and thus outside the sRGB gamut.
+		The alpha channel holds the phase between -pi and 0 that corredponds to
+		the wavelength. It can be used to evaluate a moment-based reflectance
+		spectrum that uses the XYZ warp.*/
+	images_t spectrum;
+} illuminant_spectrum_t;
 
 
 //! The triangle mesh that is being displayed and a specification of the light
@@ -300,6 +337,8 @@ typedef struct {
 typedef struct {
 	//! A sampler for material textures
 	VkSampler sampler;
+	//! A sampler for illuminant spectra
+	VkSampler spectra_sampler;
 	//! The descriptor set used to render the scene
 	descriptor_sets_t descriptor_set;
 	//! A graphics pipelines used to render the scene, which discards the
@@ -396,6 +435,7 @@ typedef struct {
 	swapchain_t swapchain;
 	render_targets_t render_targets;
 	constant_buffers_t constant_buffers;
+	illuminant_spectrum_t illuminant_spectrum;
 	lit_scene_t lit_scene;
 	render_pass_t render_pass;
 	scene_subpass_t scene_subpass;
@@ -409,7 +449,7 @@ typedef struct {
 	the boolean is true, the object and all objects that depend on it will be
 	freed and recreated by update_app().*/
 typedef struct {
-	bool device, window, gui, swapchain, render_targets, constant_buffers, lit_scene, render_pass, scene_subpass, tonemap_subpass, gui_subpass, frame_workloads;
+	bool device, window, gui, swapchain, render_targets, constant_buffers, illuminant_spectrum, lit_scene, render_pass, scene_subpass, tonemap_subpass, gui_subpass, frame_workloads;
 } app_update_t;
 
 
@@ -519,9 +559,16 @@ void free_constant_buffers(constant_buffers_t* constant_buffers, const device_t*
 int write_constant_buffer(constant_buffers_t* constant_buffers, const app_t* app, uint32_t buffer_index);
 
 
+//! \see illuminant_spectrum_t
+int create_illuminant_spectrum(illuminant_spectrum_t* spectrum, const device_t* device, const scene_spec_t* scene_spec);
+
+
+void free_illuminant_spectrum(illuminant_spectrum_t* spectrum, const device_t* device);
+
+
 //! Forwards to load_scene() using parameters that are appropriate for the
 //! given scene specification and additionally loads light sources
-int create_lit_scene(lit_scene_t* lit_scene, const device_t* device, const scene_spec_t* scene_spec);
+int create_lit_scene(lit_scene_t* lit_scene, const device_t* device, const scene_spec_t* scene_spec, const render_settings_t* settings);
 
 
 void free_lit_scene(lit_scene_t* lit_scene, const device_t* device);
@@ -535,7 +582,7 @@ void free_render_pass(render_pass_t* render_pass, const device_t* device);
 
 
 //! \see scene_subpass_t
-int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const scene_spec_t* scene_spec, const render_settings_t* render_settings, const swapchain_t* swapchain, const constant_buffers_t* constant_buffers, const lit_scene_t* lit_scene, const render_pass_t* render_pass);
+int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const scene_spec_t* scene_spec, const render_settings_t* render_settings, const swapchain_t* swapchain, const constant_buffers_t* constant_buffers, illuminant_spectrum_t* spectrum, const lit_scene_t* lit_scene, const render_pass_t* render_pass);
 
 
 void free_scene_subpass(scene_subpass_t* subpass, const device_t* device);
@@ -610,11 +657,12 @@ int handle_user_input(app_t* app, app_update_t* update);
 	\param ctx The Nuklear context to be used for the GUI.
 	\param scene_spec Scene specification to be modified.
 	\param render_settings Render settings to be modified.
+	\param illuminant_spectrum The illuminant whose name is displayed.
 	\param update Used to report required updates.
 	\param render_targets Used to query the sample count.
 	\param timestamps The timestamps from frame_workloads_t.
 	\param timestamp_period The value from VkPhysicalDeviceLimits::timestampPeriod.*/
-void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_settings_t* render_settings, app_update_t* update, const render_targets_t* render_targets, uint64_t timestamps[timestamp_index_count], float timestamp_period);
+void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_settings_t* render_settings, const illuminant_spectrum_t* illuminant_spectrum, app_update_t* update, const render_targets_t* render_targets, uint64_t timestamps[timestamp_index_count], float timestamp_period);
 
 
 /*! Updates constant buffers, takes care of synchronization, renders a single

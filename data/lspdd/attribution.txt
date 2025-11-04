@@ -1,0 +1,337 @@
+Most spectra in this dataset are from the Lamp Spectral Power Distribution Database at https://lspdd.org. The database has been created by Johanne Roby, Ph.D. and Martin Aubé, Ph.D. and is licensed under a Creative Commons Attribution-NonCommercial-NoDerivs 4.0 International license. Permissions beyond the scope of this license may be obtained by contacting the authors.
+
+Since the index range has a few gaps, I decided to fill those using illuminant E and monochromatic spectra. Here is a complete list of all illuminants (identical names do not imply identical spectra):
+
+2469: LED CREE BR30
+2470: LED Ledtech PAR20
+2471: LED Philips CandleLight
+2472: INC Sylvania A21
+2473: LED EnergySmart PAR38
+2474: LED Ledtech PAR20
+2475: INC Rona A19
+2476: LED Philips BR40
+2477: LED EnergySmart PAR30
+2478: LED Philips CandleLight B11
+2479: Standard Illuminant E
+2480: Halo Globe BR30
+2481: MH Venture
+2482: CFL Globe Twister
+2483: Monochromatic 410 nm
+2484: Monochromatic 420 nm
+2485: LED EnergySmart PAR38
+2486: LED Philips A19
+2487: LED Philips PAR20 Flood
+2488: CFL Globe Twister
+2489: LED Philips Blue-Golite-P1-Apollo 1750Lux
+2490: LED EnergySmart PAR20
+2491: Halo Standard PAR38 Accubeam
+2492: LED EnergySmart BR30
+2493: INC Sylvania A19
+2494: Halo Globe Vanity
+2495: Monochromatic 430 nm
+2496: LED Globe A19
+2497: LED EnergySmart PAR30
+2498: Halo Globe R30
+2499: LED Philips Encaster 7inch
+2500: Halo Sylvania PAR38
+2501: LED Ledtech Bridgelux-4440K-filtered
+2502: LED EnergySmart PAR20 BlackBulbBody
+2503: LED Philips Streetview-3white-board
+2504: CFL Globe Twister
+2505: Monochromatic 440 nm
+2506: LED Philips A19
+2507: LED Standard PAR30LN
+2508: Halo Globe PAR30
+2509: LED Ledtech PAR20
+2510: CFL GE T8 G13
+2511: Monochromatic 450 nm
+2512: LED Philips A19
+2513: Halo Globe Fan
+2514: Halo Sylvania PAR38
+2515: INC Globe A19
+2516: LED Standard PAR20
+2517: Monochromatic 460 nm
+2518: CFL Globe BR38
+2519: Monochromatic 470 nm
+2520: Monochromatic 480 nm
+2521: CFL Globe R30
+2522: LED Lucimed Luminette 1000Lux
+2523: Monochromatic 490 nm
+2524: Halo Globe R20
+2525: Monochromatic 500 nm
+2526: Monochromatic 510 nm
+2527: Halo Sylvania PAR30
+2528: LED Philips Claculite 4inch Encaster
+2529: LED EnergySmart BR30
+2530: Halo Globe PAR20
+2531: LED Standard PAR20
+2532: Halo Globe BR25
+2533: CFL Globe Twister
+2534: CFL Tensor Twister
+2535: Monochromatic 520 nm
+2536: HPS Philips Helios
+2537: CFL Globe R30
+2538: Monochromatic 530 nm
+2539: Halo Sylvania A19
+2540: LED Standard PAR30
+2541: LED Sylvania A19
+2542: LED Philips Streetview-2amber-board-and-1white-board
+2543: Monochromatic 540 nm
+2544: Halo Globe PAR38
+2545: LED Philips A19
+2546: LED Philips Lytepro7-Architectural-Wall-Sconce
+2547: LED CREE A19
+2548: INC GE A19
+2549: LED LightingScience PAR20
+2550: INC Globe A19
+2551: LED Ledtech Bridgelux
+2552: INC Sylvania A19
+2553: Halo Globe PAR30
+2554: Halo Sylvania PAR30
+2555: Monochromatic 550 nm
+2556: LED Philips MR16
+2557: INC Sylvania A21
+2558: CFL Elume Twister T2
+2559: LED Philips Encaster
+2560: CFL Elume PAR20
+2561: Halo Standard Par30 LN
+2562: LED Sylvania A19
+2563: Monochromatic 560 nm
+2564: INC GE A19
+2565: CFL ELume PAR30
+2566: LED EnergySmart A19
+2567: CFL ELume PAR20
+2568: LED EnergySmart PAR30
+2569: Halo Standard PAR30 Accubeam
+2570: LED LightingScience PAR20
+2571: Halo Globe BR38
+2572: INC Globe A19
+2573: LED LightingScience PAR20
+2574: LED Standard A19 Omni
+2575: LED EnergySmart PAR20
+2576: Monochromatic 570 nm
+2577: LED Philips Streetview-3amber-board
+2578: INC Globe A19
+2579: LED Ledtech Bridgelux-2760K-filtered
+2580: INC Sylvania A15
+2581: LED CREE A19
+2582: LED Philips A21
+2583: LED Sylvania PAR38
+2584: Halo Globe A19
+2585: INC GE Candle-Crystalclear
+2586: Monochromatic 580 nm
+2587: LED Standard A19 Omni
+2588: LED Standard PAR30 LN
+2589: CFL Elume PAR38
+2590: INC Sylvania A19
+2591: LED Philips BR30
+2592: LED Globe A19
+2593: CFL Sylvania Twister
+2594: LED Philips Encaster
+2595: LED GE A19
+2596: Halo Globe Vanity
+2597: LED Philips Candelabra
+2598: Monochromatic 590 nm
+2599: LED Sylvania G25 Bombilla
+2600: LED EnergySmart PAR30
+2601: LED Philips MR16
+2602: CFL Noma Twister
+2603: LED LightingScience PAR20
+2604: LED Tlsanli A19
+2605: Monochromatic 600 nm
+2606: LED Philips PAR38
+2607: Halo ELume PAR30
+2608: LED Philips RoadStar-GPLS-49LED
+2609: LED Sylvania A19
+2610: CFL Globe PAR30
+2611: Halo Sylvania PAR38
+2612: LED Philips MR16
+2613: LED Sylvania BR30
+2614: LED Energizer PAR30
+2615: LED Ledtech Bridgelux
+2616: CFL ELume PAR38
+2617: Monochromatic 610 nm
+2618: CFL GE Twister
+2619: LED LiteBook LiteBook-Elite 1000Lux
+2620: Halo Globe A19
+2621: LED Standard A15
+2622: Monochromatic 620 nm
+2623: Halo Standard PAR30 Flood
+2624: LED Ecosmart Encastre10.1cm
+2625: Halo Globe BR40
+2626: CFL Globe AShape
+2627: CFL ELume PAR30 LN Flood
+2628: Halo Globe BR38
+2629: sun sun sun
+2630: LED TCP Elite
+2631: LED Philips Slim
+2632: LED TCP Elite
+2633: LED Philips PAR20
+2634: LED TCP PAR20
+2635: LED Philips MR16
+2636: LED TCP PAR20
+2637: Biological Sensitivity Msas
+2638: Biological Sensitivity Pas
+2639: Biological Sensitivity Scotopic
+2640: Biological Sensitivity Photopic
+2641: MH Philips High Bay
+2642: LED DALS Cylinder-1014
+2643: LED DALS Wall-Pack-1190
+2644: MH Philips High Bay
+2645: LED RAB-Desigh Ceiling-Light
+2646: LED DALS Wall-001
+2647: LED RAB-Design Wall-Light
+2648: LED DALS Wall-004
+2649: LED DALS Step-light-002
+2650: LED RAB-Design VEK-2
+2651: LED DALS Cylinder-1012
+2652: LED DALS Wall-003
+2653: LED DALS Wall-Pack-1192
+2654: LED DALS Step-light-001
+2655: LED DALS Wall-002
+2656: MH Philips Wallpack
+2657: Standard Illuminant D75
+2658: Standard Illuminant D55
+2659: Standard Illuminant A
+2660: Standard Illuminant C
+2661: Standard Illuminant D65
+2662: Standard Illuminant D50
+2663: Standard Illuminant FL3.3
+2664: Standard Illuminant FL8
+2665: Standard Illuminant FL1
+2666: Standard Illuminant FL3.5
+2667: Standard Illuminant FL10
+2668: Standard Illuminant FL7
+2669: Standard Illuminant FL3.12
+2670: Standard Illuminant FL3.7
+2671: Standard Illuminant FL11
+2672: Standard Illuminant FL3
+2673: Standard Illuminant FL9
+2674: Standard Illuminant HP5
+2675: Standard Illuminant FL3.6
+2676: Standard Illuminant FL3.11
+2677: Standard Illuminant FL3.8
+2678: Standard Illuminant FL3.15
+2679: Standard Illuminant FL12
+2680: Standard Illuminant HP3
+2681: Standard Illuminant HP2
+2682: Standard Illuminant FL3.9
+2683: Standard Illuminant FL3.2
+2684: Standard Illuminant FL3.14
+2685: Standard Illuminant FL3.4
+2686: Standard Illuminant FL3.13
+2687: Standard Illuminant HP4
+2688: Biological Sensitivity Moths
+2689: Biological Sensitivity Honeybees
+2690: Standard Illuminant FL2
+2691: Standard Illuminant FL4
+2692: Standard Illuminant FL5
+2693: Standard Illuminant FL3.10
+2694: Standard Illuminant HP1
+2695: Standard Illuminant FL3.1
+2696: Standard Illuminant FL6
+2697: LED Dals
+2698: LED Dals
+2699: LED Dals
+2700: LED Philips
+2701: LED Dals
+2702: LED Philips
+2703: LED Dals
+2704: LED Dals
+2705: LED Dals
+2706: LED Philips
+2707: LED Dals
+2708: LED Dals
+2709: LED Dals
+2710: LED Dals
+2711: LED Philips
+2712: LED Dals
+2713: LED Philips
+2714: LED Dals
+2715: LED Dals
+2716: LED Dals
+2717: LED Philips
+2718: LED Dals
+2719: LED Dals
+2720: LED Philips
+2721: LED Philips COREPRO-MINICYLINDER
+2722: LED Philips SLIME-Downlight
+2723: LED Greatwall-Ledlight A19
+2724: INC Sylvania A19
+2725: INC Rona A19
+2726: INC Standard A19
+2727: INC GE PAR38-Reflector
+2728: LED Philips PAR30S
+2729: INC GE A19
+2730: INC Sylvania A19
+2731: INC Rona PAR38
+2732: Halo GE PAR38
+2733: Halo Philips PAR20
+2734: LED Greatwall-Ledlight A19
+2735: CFL Rona Twister
+2736: INC Globe Half-Miror
+2737: CFL Rona Twister
+2738: CFL Globe domestic-use
+2739: LED GE Relax
+2740: INC Rona A19
+2741: LED Standard Half-Miror
+2742: LED GE Refresh
+2743: LED Greatwall-Ledlight A19
+2744: INC Rona A19
+2745: INC Sylvania A19
+2746: INC Sylvania A19
+2747: Halo Noma PAR20
+2748: INC Rona PAR30
+2749: LED Greatwall-Ledlight A19
+2750: CFL Noma Twister
+2751: INC Globe A19
+2752: LED Greatwall-Ledlight A19
+2753: LED Greatwall-Ledlight A19
+2754: CFL Globe Twister
+2755: INC Rona A19
+2756: INC Standard
+2757: INC Globe A19
+2758: CFL Globe
+2759: INC GE PAR20
+2760: LED GE Vintage-Style
+2761: INC Philips domestic-use
+2762: CFL Globe domestic-use
+2763: INC Rona domestic-use
+2764: Monochromatic 630 nm
+2765: INC Standard A21
+2766: Monochromatic 640 nm
+2767: INC Standard domestic-use
+2768: Monochromatic 650 nm
+2769: HPS GE domestic-use
+2770: INC GE domestic-use
+2771: INC Rona domestic-use
+2772: Monochromatic 660 nm
+2773: INC Noma A19
+2774: LED Standard candle
+2775: INC Sylvania A19
+2776: INC GE domestic-use
+2777: INC Standard candlelight
+2778: INC Standard candlelight
+2779: LED Luminus A19
+2780: INC Sylvania A19
+2781: INC GE domestic-use
+2782: INC Noma domestic-use
+2783: LED Oasis de nuit etoilee A19
+2784: LED Oasis de nuit etoilee A19
+2785: LED Oasis de nuit etoilee A19
+2786: LED Oasis de nuit etoilee A19
+2787: LED Oasis de nuit etoilee A19
+2788: LED Oasis de nuit etoilee A19
+2789: LED Oasis de nuit etoilee A19
+2790: LED Oasis de nuit etoilee A19
+2791: LED Oasis de nuit etoilee A19
+2792: LED Oasis de nuit etoilee A19
+2793: LED Oasis de nuit etoilee A19
+2794: LED Oasis de nuit etoilee A19
+2795: LED Oasis de nuit etoilee A19
+2796: LED Oasis de nuit etoilee A19
+2797: LED Oasis de nuit etoilee A19
+2798: LED Oasis de nuit etoilee A19
+2799: LED Oasis de nuit etoilee A19
+2800: LED Oasis de nuit etoilee A19
+2801: LED Oasis de nuit etoilee A19

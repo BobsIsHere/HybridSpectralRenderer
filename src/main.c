@@ -2,6 +2,8 @@
 #include "string_utilities.h"
 #include "math_utilities.h"
 #include "timer.h"
+#include "pfm.h"
+#include "tonemap.h"
 #include "stb_image_write.h"
 #include <stdio.h>
 #include <string.h>
@@ -33,15 +35,22 @@ int get_scene_file(scene_file_t scene_file, const char** scene_name, const char*
 		case scene_file_bistro_inside:
 			name = "Bistro inside";
 			file = "data/Bistro_inside.vks";
-			textures = "data/Bistro_textures";
+			textures = "data/Bistro_v5.2_textures";
 			lights = "data/Bistro_inside.lights";
 			save = "data/saves/bistro/inside.rt_save";
 			break;
 		case scene_file_bistro_outside:
 			name = "Bistro outside";
-			file = "data/Bistro_outside.vks";
-			textures = "data/Bistro_textures";
+			file = "data/Bistro_outside_balloons.vks";
+			textures = "data/Bistro_v5.2_textures";
 			lights = "data/Bistro_outside.lights";
+			save = "data/saves/bistro/outside.rt_save";
+			break;
+		case scene_file_bistro_outside_1_light:
+			name = "Bistro outside (1 small light)";
+			file = "data/Bistro_outside_1_light.vks";
+			textures = "data/Bistro_v5.2_textures";
+			lights = "data/Bistro_outside_1_light.lights";
 			save = "data/saves/bistro/outside.rt_save";
 			break;
 		case scene_file_cornell_box:
@@ -114,6 +123,8 @@ void get_scene_spec_updates(app_update_t* update, const scene_spec_t* old_spec, 
 		update->lit_scene = update->scene_subpass = true;
 	if (old_spec->tonemapper != new_spec->tonemapper)
 		update->tonemap_subpass = true;
+	if (old_spec->emission_material_spectrum_id != new_spec->emission_material_spectrum_id)
+		update->illuminant_spectrum = true;
 }
 
 
@@ -133,11 +144,9 @@ void init_scene_spec(scene_spec_t* spec) {
 	};
 	scene_spec_t default_spec = {
 		.camera = cornell_box_camera,
-		.tonemapper = tonemapper_aces,
+		.tonemapper = tonemapper_op_clamp,
 		.exposure = 1.0f,
-		.sky_color = { 0.2f, 0.4f, 1.0f },
-		.sky_strength = 0.0f,
-		.emission_material_color = { 1.0f, 0.9f, 0.6f },
+		.emission_material_spectrum_id = 2661,
 		.emission_material_strength = 20.0f,
 		.scene_file = scene_file_cornell_box,
 	};
@@ -148,7 +157,8 @@ void init_scene_spec(scene_spec_t* spec) {
 
 void init_render_settings(render_settings_t* settings) {	
 	render_settings_t default_settings = {
-		.sampling_strategy = sampling_strategy_nee,
+		.color_model = color_model_spectral,
+		.wavelength_sample_count = 4,
 		.path_length = 4,
 	};
 	(*settings) = default_settings;
@@ -639,6 +649,7 @@ int write_constant_buffer(constant_buffers_t* constant_buffers, const app_t* app
 		.inv_viewport_size = { 1.0f / (float) viewport.width, 1.0f / (float) viewport.height },
 		.camera_type = (int) camera->type,
 		.exposure = app->scene_spec.exposure,
+		.white_weight = app->scene_spec.white_weight,
 		.frame_index = app->scene_spec.frame_index,
 		.accum_frame_count = app->render_targets.accum_frame_count + 1,
 	};
@@ -651,10 +662,12 @@ int write_constant_buffer(constant_buffers_t* constant_buffers, const app_t* app
 	const scene_t* scene = &app->lit_scene.scene;
 	memcpy(cts.dequantization_factor, scene->header.dequantization_factor, sizeof(cts.dequantization_factor));
 	memcpy(cts.dequantization_summand, scene->header.dequantization_summand, sizeof(cts.dequantization_summand));
-	for (uint32_t i = 0; i != 3; ++i) {
-		cts.sky_radiance[i] = app->scene_spec.sky_color[i] * app->scene_spec.sky_strength;
-		cts.emission_material_radiance[i] = app->scene_spec.emission_material_color[i] * app->scene_spec.emission_material_strength;
-	}
+	// We normalize by illuminant luminance such that all illuminant spectra
+	// have similar brightness
+	float luminance = 0.2126f * app->illuminant_spectrum.rgb_color[0] + 0.7152f * app->illuminant_spectrum.rgb_color[1] + 0.0722f * app->illuminant_spectrum.rgb_color[2];
+	for (uint32_t i = 0; i != 3; ++i)
+		cts.emission_material_radiance[i] = app->illuminant_spectrum.rgb_color[i] * app->scene_spec.emission_material_strength / luminance;
+	cts.emission_spectrum_integral = app->illuminant_spectrum.integral * app->scene_spec.emission_material_strength / luminance;
 	memcpy(cts.params, app->scene_spec.params, sizeof(cts.params));
 	memcpy(cts.spherical_lights, app->lit_scene.spherical_lights, sizeof(cts.spherical_lights));
 	float aspect = ((float) app->swapchain.extent.width) / ((float) app->swapchain.extent.height);
@@ -676,7 +689,85 @@ int write_constant_buffer(constant_buffers_t* constant_buffers, const app_t* app
 }
 
 
-int create_lit_scene(lit_scene_t* lit_scene, const device_t* device, const scene_spec_t* scene_spec) {
+void write_illuminant_spectrum(void* image_data, uint32_t image_index, const VkImageSubresource* subresource, VkDeviceSize buffer_size, const VkImageCreateInfo* image_info, const VkExtent3D* subresource_extent, const void* context) {
+	fread(image_data, 4 * sizeof(uint16_t), subresource_extent->width, (FILE*) context);
+}
+
+
+int create_illuminant_spectrum(illuminant_spectrum_t* spectrum, const device_t* device, const scene_spec_t* scene_spec) {
+	// Open the appropriate file
+	spectrum->file_path = format_uint("data/lspdd/texture/%u.spectrum", scene_spec->emission_material_spectrum_id);
+	spectrum->file = fopen(spectrum->file_path, "rb");
+	if (!spectrum->file) {
+		printf("Failed to open a spectrum file at %s. Please check path and permissions.\n", spectrum->file_path);
+		free_illuminant_spectrum(spectrum, device);
+		return 1;
+	}
+	// Read the header
+	const char* expected_marker = "spectrum";
+	char marker[9];
+	marker[8] = '\0';
+	fread(marker, sizeof(char), 8, spectrum->file);
+	if (strcmp(marker, expected_marker) != 0) {
+		printf("The file at %s is not a valid spectrum file.\n", spectrum->file_path);
+		free_illuminant_spectrum(spectrum, device);
+		return 1;
+	}
+	uint64_t version;
+	if (!fread(&version, sizeof(version), 1, spectrum->file) || version != 0) {
+		printf("The file at %s uses an unsupported version of the spectrum file format.\n", spectrum->file_path);
+		free_illuminant_spectrum(spectrum, device);
+		return 1;
+	}
+	fread(&spectrum->name, sizeof(spectrum->name), 1, spectrum->file);
+	uint32_t sample_count;
+	fread(&sample_count, sizeof(sample_count), 1, spectrum->file);
+	fread(spectrum->rgb_color, sizeof(spectrum->rgb_color), 1, spectrum->file);
+	fread(&spectrum->integral, sizeof(spectrum->integral), 1, spectrum->file);
+	// Create the image
+	image_request_t request = {
+		.image_info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.arrayLayers = 1,
+			.extent = { sample_count, 1, 1 },
+			.format = VK_FORMAT_R16G16B16A16_SFLOAT,
+			.imageType = VK_IMAGE_TYPE_1D,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.mipLevels = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		},
+		.view_info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.viewType = VK_IMAGE_VIEW_TYPE_1D,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			},
+		},
+	};
+	if (create_images(&spectrum->spectrum, device, &request, 1, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+		printf("Failed to create a 1D texture for an illuminant spectrum with %u samples from file %s.\n", sample_count, spectrum->file_path);
+		free_illuminant_spectrum(spectrum, device);
+		return 1;
+	}
+	// Load it
+	fill_images(&spectrum->spectrum, device, &write_illuminant_spectrum, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, spectrum->file);
+	// Close the file
+	fclose(spectrum->file);
+	spectrum->file = NULL;
+	return 0;
+}
+
+
+void free_illuminant_spectrum(illuminant_spectrum_t* spectrum, const device_t* device) {
+	if (spectrum->file) fclose(spectrum->file);
+	free(spectrum->file_path);
+	free_images(&spectrum->spectrum, device);
+	memset(spectrum, 0, sizeof(*spectrum));
+}
+
+
+int create_lit_scene(lit_scene_t* lit_scene, const device_t* device, const scene_spec_t* scene_spec, const render_settings_t* settings) {
 	const char* scene_path;
 	const char* textures_path;
 	const char* lights_path;
@@ -696,8 +787,15 @@ int create_lit_scene(lit_scene_t* lit_scene, const device_t* device, const scene
 		printf("Loaded %u spherical lights from %s.\n", lit_scene->spherical_light_count, lights_path);
 		fclose(file);
 	}
+	// Figure out what suffixes go after material names to get texture names
+	const char* suffixes[material_texture_type_count];
+	suffixes[material_texture_type_base_color] = "_BaseColor.vkt";
+	if (settings->color_model == color_model_spectral)
+		suffixes[material_texture_type_base_color] = "_BaseColorFourierSRGB.vkt";
+	suffixes[material_texture_type_specular] = "_Specular.vkt";
+	suffixes[material_texture_type_normal] = "_Normal.vkt";
 	// Load the scene
-	int result = load_scene(&lit_scene->scene, device, scene_path, textures_path);
+	int result = load_scene(&lit_scene->scene, device, scene_path, textures_path, suffixes);
 	if (!result)
 		printf("Loaded %lu triangles and %lu materials from %s.\n", lit_scene->scene.header.triangle_count, lit_scene->scene.header.material_count, scene_path);
 	return result;
@@ -857,7 +955,7 @@ void free_render_pass(render_pass_t* render_pass, const device_t* device) {
 }
 
 
-int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const scene_spec_t* scene_spec, const render_settings_t* render_settings, const swapchain_t* swapchain, const constant_buffers_t* constant_buffers, const lit_scene_t* lit_scene, const render_pass_t* render_pass) {
+int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const scene_spec_t* scene_spec, const render_settings_t* render_settings, const swapchain_t* swapchain, const constant_buffers_t* constant_buffers, illuminant_spectrum_t* spectrum, const lit_scene_t* lit_scene, const render_pass_t* render_pass) {
 	memset(subpass, 0, sizeof(*subpass));
 	const scene_t* scene = &lit_scene->scene;
 	// Create a sampler for material textures
@@ -876,8 +974,23 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		free_scene_subpass(subpass, device);
 		return 1;
 	}
+	// Create a sampler for illuminant spectra
+	VkSamplerCreateInfo spectra_sampler_info = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+		.minFilter = VK_FILTER_LINEAR,
+		.magFilter = VK_FILTER_LINEAR,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+	};
+	if (vkCreateSampler(device->device, &spectra_sampler_info, NULL, &subpass->spectra_sampler)) {
+		printf("Failed to create a sampler for spectra in the scene subpass.\n");
+		free_scene_subpass(subpass, device);
+		return 1;
+	}
 	// Create a descriptor set
-	#define MESH_BINDING_START 3
+	#define MESH_BINDING_START 4
 	VkDescriptorSetLayoutBinding bindings[MESH_BINDING_START + mesh_buffer_type_count] = {
 		// The constant buffer
 		{ .binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER },
@@ -889,6 +1002,8 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		},
 		// The acceleration structure (BVH) containing all scene geometry
 		{ .binding = 2, .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR },
+		// The illuminant spectrum
+		{ .binding = 3, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER },
 	};
 	// The mesh buffers (made available to the fragment shader)
 	for (uint32_t i = 0; i != mesh_buffer_type_count; ++i) {
@@ -918,10 +1033,16 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		.pAccelerationStructures = &scene->bvhs.bvhs[bvh_level_top],
 		.accelerationStructureCount = 1,
 	};
+	VkDescriptorImageInfo illuminant_info = {
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		.imageView = spectrum->spectrum.images[0].view,
+		.sampler = subpass->spectra_sampler,
+	};
 	VkWriteDescriptorSet writes[MESH_BINDING_START + mesh_buffer_type_count] = {
 		{ .dstBinding = 0, .pBufferInfo = &constant_buffer_info, },
 		{ .dstBinding = 1, .pImageInfo = image_infos, },
 		{ .dstBinding = 2, .pNext = &bvh_info, },
+		{ .dstBinding = 3, .pImageInfo = &illuminant_info },
 	};
 	for (uint32_t i = 0; i != mesh_buffer_type_count; ++i) {
 		VkWriteDescriptorSet* write = &writes[MESH_BINDING_START + i];
@@ -942,10 +1063,9 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		format_uint("EMISSION_MATERIAL_INDEX=%u", emission_material_index),
 		format_uint("SPHERICAL_LIGHT_COUNT=%u", lit_scene->spherical_light_count),
 		format_uint("PATH_LENGTH=%u", render_settings->path_length),
-		format_uint("SAMPLING_STRATEGY_SPHERICAL=%u", render_settings->sampling_strategy == sampling_strategy_spherical),
-		format_uint("SAMPLING_STRATEGY_PSA=%u", render_settings->sampling_strategy == sampling_strategy_psa),
-		format_uint("SAMPLING_STRATEGY_BRDF=%u", render_settings->sampling_strategy == sampling_strategy_brdf),
-		format_uint("SAMPLING_STRATEGY_NEE=%u", render_settings->sampling_strategy == sampling_strategy_nee),
+		format_uint("COLOR_MODEL_RGB=%u", render_settings->color_model == color_model_rgb),
+		format_uint("COLOR_MODEL_SPECTRAL=%u", render_settings->color_model == color_model_spectral),
+		format_uint("WAVELENGTH_SAMPLE_COUNT=%u", render_settings->wavelength_sample_count),
 	};
 	shader_compilation_request_t vert_request = {
 		.shader_path = "src/shaders/pathtrace.vert.glsl",
@@ -1079,6 +1199,7 @@ void free_scene_subpass(scene_subpass_t* subpass, const device_t* device) {
 	free_descriptor_sets(&subpass->descriptor_set, device);
 	if (subpass->vert_shader) vkDestroyShaderModule(device->device, subpass->vert_shader, NULL);
 	if (subpass->frag_shader) vkDestroyShaderModule(device->device, subpass->frag_shader, NULL);
+	if (subpass->spectra_sampler) vkDestroySampler(device->device, subpass->spectra_sampler, NULL);
 	if (subpass->sampler) vkDestroySampler(device->device, subpass->sampler, NULL);
 	memset(subpass, 0, sizeof(*subpass));
 }
@@ -1116,9 +1237,9 @@ int create_tonemap_subpass(tonemap_subpass_t* subpass, const device_t* device, c
 	vkUpdateDescriptorSets(device->device, COUNT_OF(writes), writes, 0, NULL);
 	// Compile the shaders and create the shader modules
 	char* defines[] = {
-		format_uint("TONEMAPPER_CLAMP=%u", scene_spec->tonemapper == tonemapper_clamp),
-		format_uint("TONEMAPPER_ACES=%u", scene_spec->tonemapper == tonemapper_aces),
-		format_uint("TONEMAPPER_KHRONOS_PBR_NEUTRAL=%u", scene_spec->tonemapper == tonemapper_khronos_pbr_neutral),
+		format_uint("TONEMAPPER_OP_CLAMP=%u", scene_spec->tonemapper == tonemapper_op_clamp),
+		format_uint("TONEMAPPER_OP_ACES=%u", scene_spec->tonemapper == tonemapper_op_aces),
+		format_uint("TONEMAPPER_OP_KHRONOS_PBR_NEUTRAL=%u", scene_spec->tonemapper == tonemapper_op_khronos_pbr_neutral),
 	};
 	shader_compilation_request_t vert_request = {
 		.shader_path = "src/shaders/tonemap.vert.glsl",
@@ -1484,9 +1605,18 @@ int show_slide(slideshow_t* slideshow, scene_spec_t* scene_spec, render_settings
 		printf("Slide index %u is past the end of the slideshow with its %u slides.\n", slide_index, slideshow->slide_count);
 	slideshow->slide_current = slide_index;
 	render_settings_t old_settings = *render_settings;
-	if (quickload(scene_spec, update, slideshow->slides[slideshow->slide_current].quicksave))
+	slide_t* slide = &slideshow->slides[slideshow->slide_current];
+	if (quickload(scene_spec, update, slide->quicksave))
 		return 1;
+	if (slide->emission_material_spectrum_id != 0)
+		scene_spec->emission_material_spectrum_id = slide->emission_material_spectrum_id;
+	if (slide->emission_material_strength != 0.0f)
+		scene_spec->emission_material_strength = slide->emission_material_strength;
+	if (slide->white_weight != 0.0f)
+		scene_spec->white_weight = slide->white_weight;
 	(*render_settings) = slideshow->slides[slideshow->slide_current].render_settings;
+	if (old_settings.color_model != render_settings->color_model)
+		update->lit_scene = true;
 	if (memcmp(&old_settings, render_settings, sizeof(old_settings)) != 0)
 		update->scene_subpass = true;
 	printf("Showing slide %u.\n", slide_index);
@@ -1526,9 +1656,10 @@ int update_app(app_t* app, const app_update_t* update, bool recreate) {
 		up.swapchain |= up.device | up.window;
 		up.render_targets |= up.device | up.swapchain;
 		up.constant_buffers |= up.device;
+		up.illuminant_spectrum |= up.device;
 		up.lit_scene |= up.device;
 		up.render_pass |= up.device | up.swapchain | up.render_targets;
-		up.scene_subpass |= up.device | up.swapchain | up.constant_buffers | up.lit_scene | up.render_pass;
+		up.scene_subpass |= up.device | up.swapchain | up.constant_buffers | up.illuminant_spectrum | up.lit_scene | up.render_pass;
 		up.tonemap_subpass |= up.device | up.render_targets | up.constant_buffers | up.render_pass;
 		up.gui_subpass |= up.device | up.gui | up.swapchain | up.constant_buffers | up.render_pass;
 		up.frame_workloads |= up.device;
@@ -1540,6 +1671,7 @@ int update_app(app_t* app, const app_update_t* update, bool recreate) {
 	if (up.scene_subpass) free_scene_subpass(&app->scene_subpass, &app->device);
 	if (up.render_pass) free_render_pass(&app->render_pass, &app->device);
 	if (up.lit_scene) free_lit_scene(&app->lit_scene, &app->device);
+	if (up.illuminant_spectrum) free_illuminant_spectrum(&app->illuminant_spectrum, &app->device);
 	if (up.constant_buffers) free_constant_buffers(&app->constant_buffers, &app->device);
 	if (up.render_targets) free_render_targets(&app->render_targets, &app->device);
 	if (up.swapchain) free_swapchain(&app->swapchain, &app->device);
@@ -1557,9 +1689,10 @@ int update_app(app_t* app, const app_update_t* update, bool recreate) {
 	 || up.swapchain && (ret = create_swapchain(&app->swapchain, &app->device, app->window, app->params.v_sync))
 	 || up.render_targets && (ret = create_render_targets(&app->render_targets, &app->device, &app->swapchain))
 	 || up.constant_buffers && (ret = create_constant_buffers(&app->constant_buffers, &app->device))
-	 || up.lit_scene && (ret = create_lit_scene(&app->lit_scene, &app->device, &app->scene_spec))
+	 || up.illuminant_spectrum && (ret = create_illuminant_spectrum(&app->illuminant_spectrum, &app->device, &app->scene_spec))
+	 || up.lit_scene && (ret = create_lit_scene(&app->lit_scene, &app->device, &app->scene_spec, &app->render_settings))
 	 || up.render_pass && (ret = create_render_pass(&app->render_pass, &app->device, &app->swapchain, &app->render_targets))
-	 || up.scene_subpass && (ret = create_scene_subpass(&app->scene_subpass, &app->device, &app->scene_spec, &app->render_settings, &app->swapchain, &app->constant_buffers, &app->lit_scene, &app->render_pass))
+	 || up.scene_subpass && (ret = create_scene_subpass(&app->scene_subpass, &app->device, &app->scene_spec, &app->render_settings, &app->swapchain, &app->constant_buffers, &app->illuminant_spectrum, &app->lit_scene, &app->render_pass))
 	 || up.tonemap_subpass && (ret = create_tonemap_subpass(&app->tonemap_subpass, &app->device, &app->render_targets, &app->constant_buffers, &app->render_pass, &app->scene_spec))
 	 || up.gui_subpass && (ret = create_gui_subpass(&app->gui_subpass, &app->device, &app->gui, &app->swapchain, &app->constant_buffers, &app->render_pass))
 	 || up.frame_workloads && (ret = create_frame_workloads(&app->frame_workloads, &app->device))
@@ -1629,7 +1762,7 @@ int handle_user_input(app_t* app, app_update_t* update) {
 	handle_gui_input(&app->gui, app->window);
 	// Define the GUI
 	if (app->params.gui)
-		define_gui(&app->gui.context, &app->scene_spec, &app->render_settings, update, &app->render_targets, app->frame_workloads.timestamps, app->device.physical_device_properties.limits.timestampPeriod);
+		define_gui(&app->gui.context, &app->scene_spec, &app->render_settings, &app->illuminant_spectrum, update, &app->render_targets, app->frame_workloads.timestamps, app->device.physical_device_properties.limits.timestampPeriod);
 	// Use camera controls and update corresponding constants
 	control_camera(&app->scene_spec.camera, app->window);
 	// Quicksave and quickload
@@ -1646,7 +1779,14 @@ int handle_user_input(app_t* app, app_update_t* update) {
 		update->scene_subpass = update->gui_subpass = true;
 		app->render_targets.accum_frame_count = 0;
 	}
+	// Toggling spectral rendering
+	if (key_pressed(app->window, GLFW_KEY_F7)) {
+		app->render_settings.color_model = (app->render_settings.color_model == color_model_spectral) ? color_model_rgb : color_model_spectral;
+		update->lit_scene = update->scene_subpass = true;
+	}
 	// Take screenshots
+	if (key_pressed(app->window, GLFW_KEY_F9))
+		save_screenshot("data/screenshot.pfm", image_file_format_pfm, &app->device, &app->render_targets, &app->scene_spec);
 	if (key_pressed(app->window, GLFW_KEY_F10))
 		save_screenshot("data/screenshot.hdr", image_file_format_hdr, &app->device, &app->render_targets, &app->scene_spec);
 	if (key_pressed(app->window, GLFW_KEY_F11))
@@ -1714,7 +1854,7 @@ void color_picker(struct nk_context* ctx, float* rgb_color) {
 }
 
 
-void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_settings_t* render_settings, app_update_t* update, const render_targets_t* render_targets, uint64_t timestamps[timestamp_index_count], float timestamp_period) {
+void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_settings_t* render_settings, const illuminant_spectrum_t* illuminant_spectrum, app_update_t* update, const render_targets_t* render_targets, uint64_t timestamps[timestamp_index_count], float timestamp_period) {
 	struct nk_rect bounds = { .x = 20.0f, .y = 20.0f, .w = 400.0f, .h = 380.0f };
 	if (nk_begin(ctx, "Path tracer", bounds, NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE)) {
 		// Display the frame rate and an indicator whether the UI is refreshing
@@ -1753,24 +1893,43 @@ void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_setting
 		scene_spec->scene_file = new_scene_file;
 		// Define a drop-down menu to select the tonemapping operator
 		nk_layout_row_dynamic(ctx, 30, 2);
-		const char* tonemappers[tonemapper_count];
-		tonemappers[tonemapper_clamp] = "Clamp";
-		tonemappers[tonemapper_aces] = "ACES";
-		tonemappers[tonemapper_khronos_pbr_neutral] = "Khronos PBR neutral";
-		tonemapper_t new_tonemapper = nk_combo(ctx, tonemappers, COUNT_OF(tonemappers), scene_spec->tonemapper, 30, (struct nk_vec2) { .x = 240.0f, .y = 180.0f });
+		const char* tonemappers[tonemapper_op_count];
+		tonemappers[tonemapper_op_clamp] = "Clamp";
+		tonemappers[tonemapper_op_aces] = "ACES";
+		tonemappers[tonemapper_op_khronos_pbr_neutral] = "Khronos PBR neutral";
+		tonemapper_op_t new_tonemapper = nk_combo(ctx, tonemappers, COUNT_OF(tonemappers), scene_spec->tonemapper, 30, (struct nk_vec2) { .x = 240.0f, .y = 180.0f });
 		nk_label(ctx, "Tonemapper", NK_TEXT_ALIGN_LEFT);
 		if (scene_spec->tonemapper != new_tonemapper)
 			update->tonemap_subpass = true;
 		scene_spec->tonemapper = new_tonemapper;
 		// Illumination settings
 		nk_layout_row_dynamic(ctx, 30, 1);
-		nk_property_float(ctx, "Sky emission:", 0.0f, &scene_spec->sky_strength, 40.0f, 0.01f, 1.0e-2f);
-		color_picker(ctx, scene_spec->sky_color);
 		nk_property_float(ctx, "Light emission:", 0.0f, &scene_spec->emission_material_strength, 1.0e5f, 0.01f, 1.0e-2f);
-		color_picker(ctx, scene_spec->emission_material_color);
+		nk_layout_row_dynamic(ctx, 30, 2);
+		uint32_t old_id = scene_spec->emission_material_spectrum_id;
+		nk_property_int(ctx, "LSPDD ID:", 2469, (int*) &scene_spec->emission_material_spectrum_id, 2801, 1, 0.01);
+		nk_label(ctx, illuminant_spectrum->name, NK_TEXT_ALIGN_LEFT);
+		// The way in which color is being handled
+		nk_layout_row_dynamic(ctx, 30, 1);
+		nk_bool spectral = (render_settings->color_model == color_model_spectral);
+		nk_checkbox_label_align(ctx, "Spectral", &spectral, NK_WIDGET_ALIGN_LEFT, NK_TEXT_ALIGN_LEFT);
+		color_model_t new_color_model = spectral ? color_model_spectral : color_model_rgb;
+		if (new_color_model != render_settings->color_model)
+			update->lit_scene = update->scene_subpass = true;
+		render_settings->color_model = new_color_model;
+		// The number samples for integration in the wavelength domain
+		nk_layout_row_dynamic(ctx, 30, 1);
+		int new_wavelength_sample_count = (int) render_settings->wavelength_sample_count;
+		nk_property_int(ctx, "Wavelength sample count:", 0, &new_wavelength_sample_count, 32, 1, 0.001f);
+		if (((int) render_settings->wavelength_sample_count) != new_wavelength_sample_count)
+			update->scene_subpass = true;
+		render_settings->wavelength_sample_count = (uint32_t) new_wavelength_sample_count;
 		// Exposure adjustment
 		nk_layout_row_dynamic(ctx, 30, 1);
 		nk_property_float(ctx, "Exposure:", 1.0e-34f, &scene_spec->exposure, 1.0e38f, scene_spec->exposure * 0.1f, scene_spec->exposure * 5.0e-3f);
+		// The white weight (for gamut compression)
+		nk_layout_row_dynamic(ctx, 30, 1);
+		nk_property_float(ctx, "White weight:", 0.0f, &scene_spec->white_weight, 1.0f, 0.05f, 1.0e-3f);
 		// Camera settings
 		const char* camera_types[camera_type_count];
 		camera_types[camera_type_first_person] = "First-person";
@@ -1788,18 +1947,6 @@ void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_setting
 		if (((int) render_settings->path_length) != new_path_length)
 			update->scene_subpass = true;
 		render_settings->path_length = (uint32_t) new_path_length;
-		// Sampling strategies for path tracing
-		nk_layout_row_dynamic(ctx, 30, 2);
-		const char* sampling_strategies[sampling_strategy_count];
-		sampling_strategies[sampling_strategy_spherical] = "Spherical";
-		sampling_strategies[sampling_strategy_psa] = "Projected solid angle";
-		sampling_strategies[sampling_strategy_brdf] = "BRDF";
-		sampling_strategies[sampling_strategy_nee] = "Next event estimation";
-		sampling_strategy_t new_sampling_strategy = nk_combo(ctx, sampling_strategies, COUNT_OF(sampling_strategies), render_settings->sampling_strategy, 30, (struct nk_vec2) { .x = 240.0f, .y = 180.0f });
-		nk_label(ctx, "Sampling strategy", NK_TEXT_ALIGN_LEFT);
-		if (render_settings->sampling_strategy != new_sampling_strategy)
-			update->scene_subpass = true;
-		render_settings->sampling_strategy = new_sampling_strategy;
 		// Buttons quicksave, quickload and shader reload
 		nk_layout_row_dynamic(ctx, 15, 1);
 		nk_layout_row_dynamic(ctx, 30, 2);
@@ -2035,35 +2182,52 @@ int save_screenshot(const char* file_path, image_file_format_t format, const dev
 	uint32_t dst_pitch = extent.width * 3;
 	// Map memory of the staging image
 	void* staged_data = NULL;
-	if (vkMapMemory(device->device, scrot.staging.allocations[dst->allocation_index], dst->memory_offset, VK_WHOLE_SIZE, 0, &staged_data)) {
+	if (vkMapMemory(device->device, scrot.staging.allocations[dst->allocation_index], dst->memory_offset, dst->memory_size, 0, &staged_data)) {
 		printf("Failed to map memory of the staging image whilst taking a screenshot.\n");
 		free_screenshot(&scrot, device);
 		return 1;
 	}
 	const float* floats = (float*) staged_data;
-	// For HDR images convert half to float
+	// For HDR images copy the floats
 	uint32_t pixel_count = extent.width * extent.height;
-	if (format == image_file_format_hdr) {
+	if (format == image_file_format_hdr || format == image_file_format_pfm) {
 		scrot.hdr_copy = malloc(pixel_count * 3 * sizeof(float));
 		for (uint32_t x = 0; x != extent.width; ++x)
 			for (uint32_t y = 0; y != extent.height; ++y)
 				for (uint32_t i = 0; i != 3; ++i)
 					scrot.hdr_copy[i + x * 3 + y * dst_pitch] = floats[i + x * 4 + y * src_pitch] / ((float) render_targets->accum_frame_count);
 		// Store the image
-		if (!stbi_write_hdr(file_path, (int) extent.width, (int) extent.height, 3, scrot.hdr_copy)) {
+		if ((format == image_file_format_hdr && !stbi_write_hdr(file_path, (int) extent.width, (int) extent.height, 3, scrot.hdr_copy))
+		 || (format == image_file_format_pfm && write_pfm(file_path, scrot.hdr_copy, extent.width, extent.height, 3)))
+		{
 			printf("Failed to save a HDR screenshot to %s. Please check path, permissions and available disk space.\n", file_path);
 			free_screenshot(&scrot, device);
 			return 1;
 		}
 	}
 	else {
-		// For LDR images convert float to uint8_t using tone mapping
+		// For LDR images apply tonemapping and convert float to uint8_t
 		scrot.ldr_copy = malloc(pixel_count * 3 * sizeof(uint8_t));
 		float factor = scene_spec->exposure / ((float) render_targets->accum_frame_count);
 		for (uint32_t x = 0; x != extent.width; ++x) {
 			for (uint32_t y = 0; y != extent.height; ++y) {
+				const float* pixel = &floats[x * 4 + y * src_pitch];
+				float color[3] = { pixel[0] * factor, pixel[1] * factor, pixel[2] * factor };
+				float tonemapped[3];
+				switch (scene_spec->tonemapper) {
+					case tonemapper_op_aces:
+						tonemapper_aces(tonemapped, color);
+						break;
+					case tonemapper_op_khronos_pbr_neutral:
+						tonemapper_khronos_pbr_neutral(tonemapped, color);
+						break;
+					case tonemapper_op_clamp:
+					default:
+						memcpy(tonemapped, color, sizeof(color));
+						break;
+				}
 				for (uint32_t i = 0; i != 3; ++i) {
-					float rgb = floats[i + x * 4 + y * src_pitch] * factor;
+					float rgb = tonemapped[i];
 					rgb = (rgb >= 0.0f) ? rgb : 0.0f;
 					rgb = (rgb <= 1.0f) ? rgb : 1.0f;
 					float srgb = (rgb <= 0.0031308f) ? (12.92f * rgb) : (1.055f * powf(rgb, 1.0f / 2.4f) - 0.055f);
@@ -2097,7 +2261,7 @@ void free_screenshot(screenshot_t* screenshot, const device_t* device) {
 int main(int argc, char** argv) {
 	// Define default parameters and parse arguments
 	app_params_t app_params = {
-		.initial_window_extent = { 1440, 1080 },
+		.initial_window_extent = { 1920, 1080 },
 		.slide_screenshots = true,
 		.v_sync = true,
 		.gui = true,

@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 640 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+639,0.0
+640,1.0
+641,0.0

@@ -8,6 +8,8 @@ target_sources(path_tracer PRIVATE
 	math_utilities.h
 	nuklear.c
 	nuklear.h
+	pfm.c
+	pfm.h
 	scene.c
 	scene.h
 	slides.c
@@ -18,6 +20,8 @@ target_sources(path_tracer PRIVATE
 	textures.h
 	timer.c
 	timer.h
+	tonemap.c
+	tonemap.h
 	vulkan_basics.h
 	vulkan_basics.c
 	vulkan_formats.h
@@ -29,6 +33,7 @@ target_sources(path_tracer PRIVATE
 	shaders/mesh_quantization.glsl
 	shaders/pathtrace.frag.glsl
 	shaders/pathtrace.vert.glsl
+	shaders/spectra.glsl
 	shaders/srgb_utility.glsl
 	shaders/tonemap.frag.glsl
 	shaders/tonemap.vert.glsl

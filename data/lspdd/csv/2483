@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 410 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+409,0.0
+410,1.0
+411,0.0

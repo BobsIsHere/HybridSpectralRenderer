@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 470 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+469,0.0
+470,1.0
+471,0.0

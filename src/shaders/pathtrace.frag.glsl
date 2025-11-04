@@ -6,10 +6,15 @@
 #include "camera_utilities.glsl"
 // Lots of other includes and bindings come indirectly through this one
 #include "brdfs.glsl"
+#include "spectra.glsl"
 
 
 //! The BVH containing all scene geometry
 layout(binding = 2) uniform accelerationStructureEXT g_bvh;
+
+//! A 4-channel 1D texture that aids in importance sampling of an illuminant
+//! spectrum. See illuminant_spectrum_t for detailed documentation.
+layout(binding = 3) uniform sampler1D g_illuminant_spectrum;
 
 
 //! The outgoing radiance towards the camera as sRGB color
@@ -185,7 +190,7 @@ bool trace_ray(out shading_data_t out_shading_data, vec3 ray_origin, vec3 ray_di
 	while (rayQueryProceedEXT(ray_query)) {}
 	// If there was no hit, use the sky color
 	if (rayQueryGetIntersectionTypeEXT(ray_query, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
-		out_shading_data.emission = g_sky_radiance;
+		out_shading_data.emission = false;
 		return false;
 	}
 	// Construct shading data
@@ -199,128 +204,77 @@ bool trace_ray(out shading_data_t out_shading_data, vec3 ray_origin, vec3 ray_di
 }
 
 
-//! Like trace_ray() but only returns the emission of the shading data
-vec3 trace_ray_emission(vec3 ray_origin, vec3 ray_dir) {
+//! Like trace_ray() but only returns whether the hit surface has emission
+bool trace_ray_emission(vec3 ray_origin, vec3 ray_dir) {
 	// Trace a ray
 	rayQueryEXT ray_query;
 	rayQueryInitializeEXT(ray_query, g_bvh, gl_RayFlagsOpaqueEXT, 0xff, ray_origin, 1.0e-3, ray_dir, 1e38);
 	while (rayQueryProceedEXT(ray_query)) {}
 	// If there was no hit, use the sky color
 	if (rayQueryGetIntersectionTypeEXT(ray_query, true) == gl_RayQueryCommittedIntersectionNoneEXT)
-		return g_sky_radiance;
+		return false;
 	// Otherwise, check if it is an emissive material
 	else {
 		int triangle_index = rayQueryGetIntersectionPrimitiveIndexEXT(ray_query, true);
-		if (texelFetch(g_material_indices, triangle_index).r == EMISSION_MATERIAL_INDEX)
-			return g_emission_material_radiance;
-		else
-			return vec3(0.0);
+		return texelFetch(g_material_indices, triangle_index).r == EMISSION_MATERIAL_INDEX;
 	}
-}
-
-
-//! Like path_trace_psa() but samples spherical coordiantes uniformly for
-//! instructive purposes
-vec3 path_trace_spherical(vec3 ray_origin, vec3 ray_dir, inout uvec2 seed) {
-	vec3 throughput_weight = vec3(1.0);
-	vec3 radiance = vec3(0.0);
-	[[unroll]]
-	for (uint k = 1; k != PATH_LENGTH + 1; ++k) {
-		shading_data_t s;
-		bool hit = trace_ray(s, ray_origin, ray_dir);
-		radiance += throughput_weight * s.emission;
-		if (hit && k < PATH_LENGTH) {
-			// Update the ray and the throughput weight
-			mat3 shading_to_world_space = get_shading_space(s.normal);
-			ray_origin = s.pos;
-			vec3 sampled_dir = sample_hemisphere_spherical(get_random_numbers(seed));
-			ray_dir = shading_to_world_space * sampled_dir;
-			float lambert_in = sampled_dir.z;
-			float density = get_hemisphere_spherical_density(sampled_dir.z);
-			throughput_weight *= frostbite_brdf(s, ray_dir) * lambert_in / density;
-		}
-		else
-			// End the path
-			break;
-	}
-	return radiance;
 }
 
 
 /*! Computes a Monte Carlo estimate of the radiance received along a ray. It
-	uses path tracing with uniform sampling of the projected solid angle.
+	uses path tracing with BRDF importance sampling and light sampling,
+	combined using MIS and next event estimation.
 	\param ray_origin The ray origin. A small ray offset is used automatically
 		to avoid incorrect self-shadowing.
 	\param ray_dir Normalized ray direction.
 	\param seed Used for get_random_numbers().
 	\return A Monte Carlo estimate of the incoming radiance in linear sRGB
 		(a.k.a. Rec. 709).*/
-vec3 path_trace_psa(vec3 ray_origin, vec3 ray_dir, inout uvec2 seed) {
-	vec3 throughput_weight = vec3(1.0);
-	vec3 radiance = vec3(0.0);
-	[[unroll]]
-	for (uint k = 1; k != PATH_LENGTH + 1; ++k) {
-		shading_data_t s;
-		bool hit = trace_ray(s, ray_origin, ray_dir);
-		radiance += throughput_weight * s.emission;
-		if (hit && k < PATH_LENGTH) {
-			// Update the ray and the throughput weight
-			mat3 shading_to_world_space = get_shading_space(s.normal);
-			ray_origin = s.pos;
-			vec3 sampled_dir = sample_hemisphere_psa(get_random_numbers(seed));
-			ray_dir = shading_to_world_space * sampled_dir;
-			float lambert_in = sampled_dir.z;
-			float density = get_hemisphere_psa_density(sampled_dir.z);
-			throughput_weight *= frostbite_brdf(s, ray_dir) * lambert_in / density;
-		}
-		else
-			// End the path
-			break;
-	}
-	return radiance;
-}
-
-
-//! Like path_trace_psa() but with proper importance sampling of the BRDF times
-//! cosine.
-vec3 path_trace_brdf(vec3 ray_origin, vec3 ray_dir, inout uvec2 seed) {
-	vec3 throughput_weight = vec3(1.0);
-	vec3 radiance = vec3(0.0);
-	[[unroll]]
-	for (uint k = 1; k != PATH_LENGTH + 1; ++k) {
-		shading_data_t s;
-		bool hit = trace_ray(s, ray_origin, ray_dir);
-		radiance += throughput_weight * s.emission;
-		if (hit && k < PATH_LENGTH) {
-			// Sample the BRDF and update the ray
-			ray_origin = s.pos;
-			ray_dir = sample_frostbite_brdf(s, get_random_numbers(seed));
-			float density = get_frostbite_brdf_density(s, ray_dir);
-			// The sample may have ended up in the lower hemisphere
-			float lambert_in = dot(s.normal, ray_dir);
-			if (lambert_in <= 0.0)
-				break;
-			// Update the throughput weight
-			throughput_weight *= frostbite_brdf(s, ray_dir) * lambert_in / density;
-		}
-		else
-			// End the path
-			break;
-	}
-	return radiance;
-}
-
-
-//! Like path_trace_brdf() but additionally uses next-event estimation
 vec3 path_trace_nee(vec3 ray_origin, vec3 ray_dir, inout uvec2 seed) {
-	vec3 throughput_weight = vec3(1.0);
-	vec3 nee_throughput_weight = throughput_weight;
+#if COLOR_MODEL_RGB
+	vec3 throughput_weights = vec3(1.0);
+	vec3 nee_throughput_weights = vec3(1.0);
+#elif COLOR_MODEL_SPECTRAL
+	// Sample wavelengths and store phase and RGB for each of them
+	vec4 rgb_and_phases[WAVELENGTH_SAMPLE_COUNT];
+	float wavelength_rand = get_random_numbers(seed)[0];
+	[[unroll]]
+	for (uint i = 0; i != WAVELENGTH_SAMPLE_COUNT; ++i) {
+		float uniform_jitter_rand = wavelength_rand * (1.0 / WAVELENGTH_SAMPLE_COUNT) + float(i) / WAVELENGTH_SAMPLE_COUNT;
+		rgb_and_phases[i] = textureLod(g_illuminant_spectrum, uniform_jitter_rand, 0.0);
+	}
+	// We store one throughput weight per wavelength sample
+	float throughput_weights[WAVELENGTH_SAMPLE_COUNT];
+	float nee_throughput_weights[WAVELENGTH_SAMPLE_COUNT];
+	[[unroll]]
+	for (uint i = 0; i != WAVELENGTH_SAMPLE_COUNT; ++i)
+		throughput_weights[i] = nee_throughput_weights[i] = 1.0;
+#endif
+	// Begin path tracing
 	vec3 radiance = vec3(0.0);
 	[[unroll]]
 	for (uint k = 1; k != PATH_LENGTH + 1; ++k) {
 		shading_data_t s;
 		bool hit = trace_ray(s, ray_origin, ray_dir);
-		radiance += nee_throughput_weight * s.emission;
+		if (s.emission) {
+#if COLOR_MODEL_RGB
+			radiance += nee_throughput_weights * g_emission_material_radiance;
+#elif COLOR_MODEL_SPECTRAL
+			[[unroll]]
+			for (uint i = 0; i != WAVELENGTH_SAMPLE_COUNT; ++i)
+				radiance += (nee_throughput_weights[i] * g_emission_spectrum_integral) * rgb_and_phases[i].rgb;
+#endif
+		}
+#if COLOR_MODEL_SPECTRAL
+		// Evaluate the reflectance spectrum at the hit point for the sampled
+		// wavelengths
+		float reflectance[WAVELENGTH_SAMPLE_COUNT];
+		vec3 fourier = fourier_srgb_to_fourier(s.base_color);
+		vec3 lagranges = prep_reflectance_real_lagrange_biased_3(fourier);
+		[[unroll]]
+		for (uint i = 0; i != WAVELENGTH_SAMPLE_COUNT; ++i)
+			reflectance[i] = eval_reflectance_real_lagrange_3(rgb_and_phases[i].a, lagranges);
+#endif
 		if (hit && k < PATH_LENGTH) {
 			// Sample a direction towards a light
 			float total_light_importance;
@@ -328,14 +282,23 @@ vec3 path_trace_nee(vec3 ray_origin, vec3 ray_dir, inout uvec2 seed) {
 			// Discard the sample if it is in the lower hemisphere
 			float lambert_in_0 = dot(s.normal, light_dir);
 			if (lambert_in_0 > 0.0) {
-				// Trace a ray towards the light and retrieve the emission
-				vec3 light_emission = trace_ray_emission(s.pos, light_dir);
-				// For MIS, compute the density for this direction with light
-				// and BRDF sampling
-				float light_density_0 = get_lights_density(total_light_importance, s.pos, s.normal, light_dir, true);
-				float brdf_density_0 = get_frostbite_brdf_density(s, light_dir);
-				// Evaluate the MIS estimate
-				radiance += throughput_weight * frostbite_brdf(s, light_dir) * light_emission * (lambert_in_0 / (light_density_0 + brdf_density_0));
+				// Trace a ray towards the light and check if there is emission
+				if (trace_ray_emission(s.pos, light_dir)) {
+					// For MIS, compute the density for this direction with light
+					// and BRDF sampling
+					float light_density_0 = get_lights_density(total_light_importance, s.pos, s.normal, light_dir, true);
+					float brdf_density_0 = get_frostbite_brdf_density(s, light_dir);
+					// Evaluate the MIS estimate
+					float spectrum_scale = lambert_in_0 / (light_density_0 + brdf_density_0);
+					vec2 brdf = frostbite_brdf(s, light_dir);
+#if COLOR_MODEL_RGB
+					radiance += throughput_weights * fma(s.base_color, vec3(brdf.x), vec3(brdf.y)) * g_emission_material_radiance * spectrum_scale;
+#elif COLOR_MODEL_SPECTRAL
+					[[unroll]]
+					for (uint i = 0; i != WAVELENGTH_SAMPLE_COUNT; ++i)
+						radiance += (throughput_weights[i] * (reflectance[i] * brdf.x + brdf.y) * g_emission_spectrum_integral * spectrum_scale) * rgb_and_phases[i].rgb;
+#endif
+				}
 			}
 			// Sample the BRDF for MIS and to continue the path
 			ray_origin = s.pos;
@@ -349,15 +312,32 @@ vec3 path_trace_nee(vec3 ray_origin, vec3 ray_dir, inout uvec2 seed) {
 			// accounting for MIS
 			float light_density_1 = get_lights_density(total_light_importance, s.pos, s.normal, ray_dir, false);
 			float brdf_density_1 = get_frostbite_brdf_density(s, ray_dir);
-			vec3 brdf_lambert_1 = frostbite_brdf(s, ray_dir) * lambert_in_1;
-			nee_throughput_weight = throughput_weight * (brdf_lambert_1 / (light_density_1 + brdf_density_1));
+			vec2 brdf_lambert_1 = frostbite_brdf(s, ray_dir) * lambert_in_1;
+			float mis_factor = 1.0 / (light_density_1 + brdf_density_1);
+			float rcp_brdf_density_1 = 1.0 / brdf_density_1;
+#if COLOR_MODEL_RGB
+			vec3 brdf_lambert_1_color = fma(s.base_color, vec3(brdf_lambert_1.x), vec3(brdf_lambert_1.y));
+			nee_throughput_weights = throughput_weights * brdf_lambert_1_color * mis_factor;
 			// Update the throughput-weight for the path
-			throughput_weight *= brdf_lambert_1 * (1.0 / brdf_density_1);
+			throughput_weights *= brdf_lambert_1_color * rcp_brdf_density_1;
+#elif COLOR_MODEL_SPECTRAL
+			[[unroll]]
+			for (uint i = 0; i != WAVELENGTH_SAMPLE_COUNT; ++i) {
+				float brdf_lambert_1_spectral = fma(reflectance[i], brdf_lambert_1.x, brdf_lambert_1.y);
+				nee_throughput_weights[i] = throughput_weights[i] * brdf_lambert_1_spectral * mis_factor;
+				// Update the throughput-weight for the path
+				throughput_weights[i] *= brdf_lambert_1_spectral * rcp_brdf_density_1;
+			}
+#endif
 		}
 		else
 			// End the path
 			break;
 	}
+#if COLOR_MODEL_SPECTRAL
+	// Normalize the estimate for the wavelength integral
+	radiance *= 1.0 / WAVELENGTH_SAMPLE_COUNT;
+#endif
 	return radiance;
 }
 
@@ -384,15 +364,7 @@ void main() {
 		vec2 sphere_factor = vec2(1.0, (g_camera_type == 3) ? 2.0 : 1.0);
 		ray_dir = hemisphere_to_world_space * sample_hemisphere_spherical(jittered * sphere_factor * g_inv_viewport_size);
 	}
-	// Perform path tracing using the requested technique
-#if SAMPLING_STRATEGY_SPHERICAL
-	vec3 ray_radiance = path_trace_spherical(ray_origin, ray_dir, seed);
-#elif SAMPLING_STRATEGY_PSA
-	vec3 ray_radiance = path_trace_psa(ray_origin, ray_dir, seed);
-#elif SAMPLING_STRATEGY_BRDF
-	vec3 ray_radiance = path_trace_brdf(ray_origin, ray_dir, seed);
-#elif SAMPLING_STRATEGY_NEE
+	// Perform path tracing
 	vec3 ray_radiance = path_trace_nee(ray_origin, ray_dir, seed);
-#endif
 	g_out_color = vec4(ray_radiance, 1.0);
 }

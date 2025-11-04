@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 580 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+579,0.0
+580,1.0
+581,0.0

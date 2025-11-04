@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 510 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+509,0.0
+510,1.0
+511,0.0

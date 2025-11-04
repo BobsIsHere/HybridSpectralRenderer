@@ -20,17 +20,20 @@ layout (row_major, std140, binding = 0) uniform constants {
 	vec2 g_inv_viewport_size;
 	//! The factor by which the HDR radiance is scaled during tonemapping
 	float g_exposure;
+	//! How much white should be mixed into the color (without changing the
+	//! luminance) prior to tonemapping. This is lazy gamut compression.
+	float g_white_weight;
 	//! The index of the frame being rendered for the purpose of random seed
 	//! generation
 	uint g_frame_index;
 	//! The number of frames which have been accumulated in the HDR radiance
 	//! render target. Divided out during tone mapping.
 	uint g_accum_frame_count;
-	//! The radiance for rays that leave the scene (using Rec. 709, a.k.a.
-	//! linear sRGB)
-	vec3 g_sky_radiance;
-	//! The radiance emitted by the material called _emission (Rec. 709)
+	//! The radiance emitted by the material called _emission (Rec. 709). Used
+	//! for RGB rendering, not for spectral rendering.
 	vec3 g_emission_material_radiance;
+	//! The integral w.r.t. wavelength over the used illuminant spectrum
+	float g_emission_spectrum_integral;
 	//! Four floats that can be controlled from the GUI directly and can be
 	//! used for any purpose while developing shaders
 	vec4 g_params;

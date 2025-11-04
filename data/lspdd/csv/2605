@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 600 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+599,0.0
+600,1.0
+601,0.0

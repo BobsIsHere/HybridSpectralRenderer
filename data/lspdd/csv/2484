@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 420 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+419,0.0
+420,1.0
+421,0.0

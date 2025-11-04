@@ -7,11 +7,11 @@
 layout (binding = 1) uniform sampler2D g_textures[3 * MATERIAL_COUNT];
 
 //! Provides quantized world-space positions for each vertex
-layout (binding = 3) uniform utextureBuffer g_quantized_vertex_poss;
+layout (binding = 4) uniform utextureBuffer g_quantized_vertex_poss;
 //! Provides normals and texture coordinates for each vertex
-layout (binding = 4) uniform textureBuffer g_octahedral_normal_and_tex_coords;
+layout (binding = 5) uniform textureBuffer g_octahedral_normal_and_tex_coords;
 //! Provides a material index for each triangle
-layout (binding = 5) uniform utextureBuffer g_material_indices;
+layout (binding = 6) uniform utextureBuffer g_material_indices;
 
 
 //! Full description of a shading point on a surface and its BRDF. All vectors
@@ -26,14 +26,17 @@ struct shading_data_t {
 	vec3 out_dir;
 	//! dot(normal, out_dir)
 	float lambert_out;
-	//! The emitted radiance (Rec. 709) from this shading point into direction
-	//! out_dir
-	vec3 emission;
-	//! The diffuse albedo specified using Rec. 709 (i.e. linear sRGB)
-	vec3 diffuse_albedo;
-	//! The color of specular reflection (Rec. 709) when looking at the surface
-	//! from the zenith
-	vec3 fresnel_0;
+	//! Whether the material emits light or not. In this simple renderer, all
+	//! emissive materials use the same illuminant spectrum.
+	bool emission;
+	//! The base color. For RGB rendering, the color space is linear sRGB
+	//! (a.k.a. Rec. 709), for spectral rendering it is Fourier sRGB.
+	vec3 base_color;
+	//! The diffuse albedo as linear combination of base color and pure white
+	vec2 diffuse_albedo;
+	//! The color of specular reflection when looking at the surface from the
+	//! zenith, specified as linear combination of base color and pure white
+	vec2 fresnel_0;
 	//! The roughness parameter of the GGX distribution of normals
 	float roughness;
 };
@@ -71,7 +74,7 @@ shading_data_t get_shading_data(int triangle_index, vec2 barycentrics, bool fron
 	normal_geo = normalize(normal_geo);
 	// Sample the material textures
 	uint material_index = texelFetch(g_material_indices, triangle_index).r;
-	vec3 base_color_tex = texture(g_textures[nonuniformEXT(3 * material_index + 0)], tex_coord).rgb;
+	s.base_color = texture(g_textures[nonuniformEXT(3 * material_index + 0)], tex_coord).rgb;
 	vec3 specular_tex = texture(g_textures[nonuniformEXT(3 * material_index + 1)], tex_coord).rgb;
 	vec2 normal_tex = texture(g_textures[nonuniformEXT(3 * material_index + 2)], tex_coord).rg;
 	vec3 normal_local;
@@ -95,9 +98,9 @@ shading_data_t get_shading_data(int triangle_index, vec2 barycentrics, bool fron
 	// Complete the shading data
 	s.lambert_out = dot(s.normal, s.out_dir);
 	float metalicity = specular_tex.b;
-	s.diffuse_albedo = base_color_tex - metalicity * base_color_tex;
-	s.fresnel_0 = mix(vec3(0.02), base_color_tex, metalicity);
+	s.diffuse_albedo = vec2(1.0 - metalicity, 0.0);
+	s.fresnel_0 = mix(vec2(0.0, 0.02), vec2(1.0, 0.0), metalicity);
 	s.roughness = max(0.006, specular_tex.g * specular_tex.g);
-	s.emission = (material_index == EMISSION_MATERIAL_INDEX) ? g_emission_material_radiance : vec3(0.0);
+	s.emission = (material_index == EMISSION_MATERIAL_INDEX);
 	return s;
 }

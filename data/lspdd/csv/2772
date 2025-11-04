@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 660 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+659,0.0
+660,1.0
+661,0.0

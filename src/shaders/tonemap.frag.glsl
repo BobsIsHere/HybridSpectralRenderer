@@ -65,12 +65,14 @@ vec3 tonemapper_aces(vec3 color) {
 void main() {
 	vec4 hdr_radiance = subpassLoad(g_hdr_radiance);
 	float factor = g_exposure / float(g_accum_frame_count);
-	g_out_color = hdr_radiance * vec4(vec3(factor), hdr_radiance.a);
-#if TONEMAPPER_CLAMP
+	g_out_color = hdr_radiance * vec4(vec3(factor), 1.0);
+	float luminance = dot(vec3(0.2126, 0.7152, 0.0722), g_out_color.rgb);
+	g_out_color.rgb = mix(g_out_color.rgb, vec3(luminance), g_white_weight);
+#if TONEMAPPER_OP_CLAMP
 	g_out_color.rgb = clamp(g_out_color.rgb, 0.0, 1.0);
-#elif TONEMAPPER_ACES
+#elif TONEMAPPER_OP_ACES
 	g_out_color.rgb = tonemapper_aces(g_out_color.rgb);
-#elif TONEMAPPER_KHRONOS_PBR_NEUTRAL
+#elif TONEMAPPER_OP_KHRONOS_PBR_NEUTRAL
 	g_out_color.rgb = tonemapper_khronos_pbr_neutral(g_out_color.rgb);
 #endif
 	// Color NaN pixels violett

@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 610 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+609,0.0
+610,1.0
+611,0.0

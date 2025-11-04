@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 500 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+499,0.0
+500,1.0
+501,0.0

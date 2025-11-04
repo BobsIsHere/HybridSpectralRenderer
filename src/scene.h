@@ -42,7 +42,9 @@ typedef enum {
 typedef enum {
 	/*! The diffuse albedo is derived from this base color. For metallic
 		materials, the base color also controls the specular albedo. The format
-		is usually VK_FORMAT_BC1_RGB_SRGB_BLOCK.*/
+		is usually VK_FORMAT_BC1_RGB_SRGB_BLOCK. The color space is either sRGB
+		or Fourier sRGB depending on whether or not spectral rendering is
+		enabled.*/
 	material_texture_type_base_color,
 	/*! A texture with three parameters controlling the specular BRDF. The
 		format is usually VK_FORMAT_BC1_RGB_UNORM_BLOCK.
@@ -100,8 +102,10 @@ typedef struct {
 	\param file_path Path to a *.vks file that is to be loaded.
 	\param texture_path Path to a directory containing texture files in the
 		*.vkt format.
+	\param texture_suffixes The suffixes to use for the different material
+		textures.
 	\return 0 upon success.*/
-int load_scene(scene_t* scene, const device_t* device, const char* file_path, const char* texture_path);
+int load_scene(scene_t* scene, const device_t* device, const char* file_path, const char* texture_path, const char* texture_suffixes[material_texture_type_count]);
 
 
 void free_scene(scene_t* scene, const device_t* device);

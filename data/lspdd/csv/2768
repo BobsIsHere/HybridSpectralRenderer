@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 650 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+649,0.0
+650,1.0
+651,0.0

@@ -3,8 +3,9 @@
 #define M_PI 3.141592653589793238462643
 
 
-//! The Fresnel-Schlick approximation for the Fresnel term
-vec3 fresnel_schlick(vec3 f_0, vec3 f_90, float lambert) {
+//! The Fresnel-Schlick approximation for the Fresnel term. Colors are
+//! described as linear combinations between base color and pure white.
+vec2 fresnel_schlick(vec2 f_0, vec2 f_90, float lambert) {
 	float flip_1 = 1.0 - lambert;
 	float flip_2 = flip_1 * flip_1;
 	float flip_5 = flip_2 * flip_1 * flip_2;
@@ -13,23 +14,24 @@ vec3 fresnel_schlick(vec3 f_0, vec3 f_90, float lambert) {
 
 
 /*! Evaluates the Frostbite BRDF as described at the links below for the given
-	shading point and normalized incoming light direction:
+	shading point and normalized incoming light direction. Colors are described
+	described as linear combinations between base color and pure white.
 	https://dl.acm.org/doi/abs/10.1145/2614028.2615431
 	https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf */
-vec3 frostbite_brdf(shading_data_t s, vec3 in_dir) {
+vec2 frostbite_brdf(shading_data_t s, vec3 in_dir) {
 	// The BRDF is zero in the lower hemisphere
 	float lambert_in = dot(s.normal, in_dir);
 	if (min(lambert_in, s.lambert_out) < 0.0)
-		return vec3(0.0);
+		return vec2(0.0);
 	// It uses the half-vector between incoming and outgoing light direction
 	vec3 half_dir = normalize(in_dir + s.out_dir);
 	float half_dot_out = dot(half_dir, s.out_dir);
 	// This is the Disney diffuse BRDF
 	float f_90 = (half_dot_out * half_dot_out) * (2.0 * s.roughness) + 0.5;
 	float fresnel_diffuse =
-		fresnel_schlick(vec3(1.0), vec3(f_90), s.lambert_out).x *
-		fresnel_schlick(vec3(1.0), vec3(f_90), lambert_in).x;
-	vec3 brdf = fresnel_diffuse * s.diffuse_albedo;
+		fresnel_schlick(vec2(1.0), vec2(f_90), s.lambert_out).x *
+		fresnel_schlick(vec2(1.0), vec2(f_90), lambert_in).x;
+	vec2 brdf = fresnel_diffuse * s.diffuse_albedo;
 	// The Frostbite specular BRDF uses the GGX normal distribution function...
 	float half_dot_normal = dot(half_dir, s.normal);
 	float roughness_2 = s.roughness * s.roughness;
@@ -40,7 +42,7 @@ vec3 frostbite_brdf(shading_data_t s, vec3 in_dir) {
 	float shadowing = s.lambert_out * sqrt((lambert_in - roughness_2 * lambert_in) * lambert_in + roughness_2);
 	float smith = 0.5 / (masking + shadowing);
 	// ... and the Fresnel-Schlick approximation
-	vec3 fresnel = fresnel_schlick(s.fresnel_0, vec3(1.0), max(0.0, half_dot_out));
+	vec2 fresnel = fresnel_schlick(s.fresnel_0, vec2(0.0, 1.0), max(0.0, half_dot_out));
 	brdf += ggx * smith * fresnel;
 	return brdf * (1.0 / M_PI);
 }
@@ -156,11 +158,12 @@ float get_hemisphere_psa_density(float sampled_dir_z) {
 //! Heuristically computes a probability with which projected solid angle
 //! sampling should be used when sampling the BRDF for the given shading point.
 float get_diffuse_sampling_probability(shading_data_t s) {
-	// In principle we use the luminance of the diffuse albedo. But in specular
+	// In principle we use the luminance of the base color. But in specular
 	// highlights, the specular component is much more important than the
 	// diffuse component. Thus, we always sample it at least 50% of the time in
-	// the spirit of defensive sampling.
-	return min(0.5, dot(s.diffuse_albedo, vec3(0.2126, 0.7152, 0.0722)));
+	// the spirit of defensive sampling. This still works well enough with
+	// Fourier sRGB since it is so similar to sRGB.
+	return min(0.5, dot(s.base_color, vec3(0.2126, 0.7152, 0.0722)));
 }
 
 

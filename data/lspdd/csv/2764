@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 630 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+629,0.0
+630,1.0
+631,0.0

@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 570 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+569,0.0
+570,1.0
+571,0.0

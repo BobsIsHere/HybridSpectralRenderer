@@ -321,6 +321,7 @@ swapchain_result_t create_swapchain(swapchain_t* swapchain, const device_t* devi
 			return 1;
 		}
 	}
+	printf("The swapchain resolution in pixels is %ux%u.\n", swapchain->extent.width, swapchain->extent.height);
 	return 0;
 }
 

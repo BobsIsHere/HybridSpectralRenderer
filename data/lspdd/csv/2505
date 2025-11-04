@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 440 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+439,0.0
+440,1.0
+441,0.0

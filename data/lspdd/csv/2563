@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 560 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+559,0.0
+560,1.0
+561,0.0

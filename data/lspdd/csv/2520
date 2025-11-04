@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 480 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+479,0.0
+480,1.0
+481,0.0

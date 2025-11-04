@@ -1,0 +1,11 @@
+# Category : Monochromatic
+# Brand : 540 nm
+# Model : Monochromatic
+# Usage : Monochromatic
+# Rotational Angle : null
+# Vertical Angle : null
+# Normalization : Constant lumen
+wavelength,intensity
+539,0.0
+540,1.0
+541,0.0

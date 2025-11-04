@@ -1,4 +1,4 @@
-#  Copyright (C) 2021, Christoph Peters, Karlsruhe Institute of Technology
+#  Copyright (C) 2021, 2025, Christoph Peters, Karlsruhe Institute of Technology, TU Delft
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
 
 import numpy as np
 import os
-import imageio
+import imageio.v2 as imageio
 from subprocess import Popen
 import re
 from time import sleep
@@ -98,7 +98,8 @@ def convert_materials(destination_directory, source_directory, skip_existing=Tru
         format extension .vkt are written to this directory. Gets created if it
         does not exist.
     :param source_directory: The directory that is searched for textures. Only
-        file names ending with _BaseColor, _Normal or _Specular are considered.
+        file names ending with _BaseColor, _BaseColorFourierSRGB, _Normal or
+        _Specular are considered.
     :param skip_existing: Pass True to skip files that would require the output
         file to be overwritten. Otherwise, output files are overwritten without
         prompt.
@@ -112,11 +113,11 @@ def convert_materials(destination_directory, source_directory, skip_existing=Tru
     # terminated is set to True
     tasks = list()
     for file in os.listdir(source_directory):
-        match = re.search(r"(_BaseColor\.)|(_Normal\.)|(_Specular\.)", file)
+        match = re.search(r"(_BaseColor\.)|(_BaseColorFourierSRGB\.)|(_Normal\.)|(_Specular\.)", file)
         if match is not None and os.path.splitext(file)[1] != ".vkt":
             source_file = os.path.join(source_directory, file)
-            is_srgb = match.group(1) is not None
-            is_normal_map = match.group(2) is not None
+            is_srgb = match.group(1) is not None or match.group(2) is not None
+            is_normal_map = match.group(3) is not None
             destination_file = os.path.join(destination_directory, os.path.splitext(file)[0] + ".vkt")
             if not skip_existing or not os.path.exists(destination_file):
                 if is_srgb:

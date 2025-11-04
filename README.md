@@ -1,7 +1,6 @@
-This repository contains a Vulkan rendering framework with an implementation of a path tracer written for educational purposes.
+This repository contains a Vulkan rendering framework with an implementation of a spectral path tracer written for a [blog post series on spectral rendering](https://momentsingraphics.de/SpectralRenderingOverview.html).
 The core code of the path tracer can be found in src/shaders/pathtrace.frag.glsl.
-The underlying rendering algorithms are described in lectures available here:
-https://www.tudelft.nl/ewi/over-de-faculteit/afdelingen/intelligent-systems/computer-graphics-and-visualization/education/path-tracing-lecture
+Further pointers to code segments that are relevant for spectral rendering are provided in [part 2 of of the blog post series](SpectralRendering2Rendering.html#Links_to_relevant_code_sections).
 
 
 # Build instructions
@@ -17,18 +16,23 @@ For Linux, it is probably easier to obtain Vulkan and GLFW via a package manager
 For pacman, the relevant packages are: vulkan-headers vulkan-validation-layers glfw
 
 Once all dependencies are available, use [CMake](https://cmake.org/) to build the project using your preferred IDE or the following commands (using the directory containing this README.md as working directory):
+```
 $ cmake .
 $ make
+```
 
 
 # Run instructions
 
 If you want to see a scene other than the Cornell box, you must first make sure that you have all data files upon which the renderer depends.
 Several large files are not part of this repository and should instead be downloaded at the following link and added to the data directory.
-https://www.tudelft.nl/ewi/over-de-faculteit/afdelingen/intelligent-systems/computer-graphics-and-visualization/education/path-tracing-lecture
+https://momentsingraphics.de/Media/SpectralRendering/spectral_path_tracer_data.zip
 
 Then launch the path_tracer binary.
 **Important:** The current working directory has to be the directory containing this README.md.
 If anything goes wrong, there should be an informative error message on stdout.
 
-Camera controls use WASD for horizontal movement, QE to move down/up, right mouse button to rotate the camera and control/shift to adjust the speed. F1 toggles the UI, F2 toggles v-sync, F3/F4 are quicksave/quickload, F5 reloads shaders, holding F6 disables sample accumulation and F10/F11/F12 store screenshots to the data folder using hdr/png/jpg as format.
+Camera controls use WASD for horizontal movement, QE to move down/up, right mouse button to rotate the camera and control/shift to adjust the speed.
+F1 toggles the UI, F2 toggles v-sync, F3/F4 are quicksave/quickload, F5 reloads shaders, holding F6 disables sample accumulation and F10/F11/F12 store screenshots to the data folder using hdr/png/jpg as format.
+A checkbox in the GUI toggles between RGB rendering and spectral rendering.
+The LSPDD ID in the GUI lets you use different illuminant spectra from the [LSPDD database](https://lspdd.org/database) (as well as a few others as listed in data/lspdd/attribution.txt).
