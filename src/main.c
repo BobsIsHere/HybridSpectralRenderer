@@ -2130,7 +2130,7 @@ int main(int argc, char** argv) {
 		if (!update_needed(&update)) {
 			VkResult ret;
 			if (ret = render_frame(&app, &update)) {
-				if (ret == VK_ERROR_OUT_OF_DATE_KHR || ret == VK_ERROR_SURFACE_LOST_KHR || ret == VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT)
+				if (ret == VK_ERROR_OUT_OF_DATE_KHR || ret == VK_ERROR_SURFACE_LOST_KHR || ret == VK_SUBOPTIMAL_KHR || ret == VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT)
 					update.swapchain = update.frame_workloads = true;
 				else
 					break;
