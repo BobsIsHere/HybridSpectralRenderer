@@ -18,7 +18,7 @@ set_target_properties(path_tracer PROPERTIES CMAKE_C_STANDARD_REQUIRED True)
 add_subdirectory(src)
 
 # Add Vulkan and GLFW as dependencies
-find_package(glfw3 3.3)
+find_package(glfw3 3.4)
 if(NOT ${glfw3_FOUND})
 	set(GLFW_BUILD_DOCS False)
 	set(GLFW_BUILD_EXAMPLES False)
@@ -40,14 +40,13 @@ if (UNIX)
 	endif()
 endif()
 
-
 add_custom_command(TARGET path_tracer POST_BUILD
-# copy over data folder to build folder
+	# copy over data folder to build folder
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/data"
         "${CMAKE_BINARY_DIR}/data"
 
-# copy over src/shader folder to build folder
+	# copy over src/shader folder to build folder
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders"
         "${CMAKE_BINARY_DIR}/src/shaders"

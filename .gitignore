@@ -25,5 +25,4 @@ data/attic_textures
 data/living_room_day.vks
 data/living_room_night.vks
 data/living_room_textures
-data/slides/*
 ext/glfw/
