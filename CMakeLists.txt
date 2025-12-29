@@ -39,3 +39,16 @@ if (UNIX)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror=vla -Werror=pointer-arith")
 	endif()
 endif()
+
+
+add_custom_command(TARGET path_tracer POST_BUILD
+# copy over data folder to build folder
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/data"
+        "${CMAKE_BINARY_DIR}/data"
+
+# copy over src/shader folder to build folder
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders"
+        "${CMAKE_BINARY_DIR}/src/shaders"
+)
