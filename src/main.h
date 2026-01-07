@@ -15,6 +15,8 @@
 #define MAX_SPHERICAL_LIGHT_COUNT 32
 //! The maximal number of slides
 #define MAX_SLIDE_COUNT 100
+//! the amount of samples for taking a screenshot
+#define SCREENSHOT_SAMPLE_COUNT 1200
 
 
 //! An enumeration of available scenes (i.e. *.vks files)
@@ -87,6 +89,9 @@ typedef enum {
 	//! Illuminant spectra are densely sampled, reflectance spectra are
 	//! described using Fourier sRGB and the bounded MESE.
 	color_model_spectral,
+	//! A hybrid approach where I select which assets are rendered in RGB
+	//! and which in spectral form.
+	//color_mode_hybrid,
 	//! Number of different ways to handle color
 	color_model_count,
 } color_model_t;

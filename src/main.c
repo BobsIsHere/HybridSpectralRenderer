@@ -862,6 +862,10 @@ int create_render_pass(render_pass_t* render_pass, const device_t* device, const
 		.attachment = 2,
 		.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
+	// TODO: create subpasses, 1 rendering in RGB and 1 in spectral (use same depth attachtement)
+	// first run depth subpass, then run color subpass  
+	// in render function check for color mode enum to check if its RGB or spectral
+	// leave gui subpass as last
 	VkSubpassDescription subpasses[] = {
 		// 0: scene subpass
 		{
@@ -1063,6 +1067,7 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		format_uint("EMISSION_MATERIAL_INDEX=%u", emission_material_index),
 		format_uint("SPHERICAL_LIGHT_COUNT=%u", lit_scene->spherical_light_count),
 		format_uint("PATH_LENGTH=%u", render_settings->path_length),
+		//TOD: add hybrid color mode?
 		format_uint("COLOR_MODEL_RGB=%u", render_settings->color_model == color_model_rgb),
 		format_uint("COLOR_MODEL_SPECTRAL=%u", render_settings->color_model == color_model_spectral),
 		format_uint("WAVELENGTH_SAMPLE_COUNT=%u", render_settings->wavelength_sample_count),
@@ -1912,6 +1917,7 @@ void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_setting
 		// The way in which color is being handled
 		nk_layout_row_dynamic(ctx, 30, 1);
 		nk_bool spectral = (render_settings->color_model == color_model_spectral);
+		// TODO: Change to take hybrid in account?
 		nk_checkbox_label_align(ctx, "Spectral", &spectral, NK_WIDGET_ALIGN_LEFT, NK_TEXT_ALIGN_LEFT);
 		color_model_t new_color_model = spectral ? color_model_spectral : color_model_rgb;
 		if (new_color_model != render_settings->color_model)
@@ -2123,6 +2129,21 @@ VkResult render_frame(app_t* app, app_update_t* update) {
 	if (ret = vkQueuePresentKHR(device->queue, &present_info)) {
 		printf("Failed to present a frame through the swapchain. Vulkan error code %d.\n", ret);
 		return ret;
+	}
+	//take screen after samples reached certain count
+	if (app->render_targets.accum_frame_count == SCREENSHOT_SAMPLE_COUNT)
+	{
+		const char* screenshot_path = "";
+		if (app->render_settings.color_model == color_model_rgb)
+		{
+			screenshot_path = "screens/screenshot_rgb.png";
+		}
+		else if (app->render_settings.color_model == color_model_spectral)
+		{
+			screenshot_path = "screens/screenshot_spectral.png";
+		}
+
+		save_screenshot(screenshot_path, image_file_format_png, device, &app->render_targets, &app->scene_spec);
 	}
 	// All done
 	++app->frame_workloads.frame_index;

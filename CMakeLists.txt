@@ -46,6 +46,11 @@ add_custom_command(TARGET path_tracer POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/data"
         "${CMAKE_BINARY_DIR}/data"
 
+	# copy over screens folder to build folder
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/screens"
+        "${CMAKE_BINARY_DIR}/screens"
+
 	# copy over src/shader folder to build folder
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders"
