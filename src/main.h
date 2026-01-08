@@ -91,7 +91,7 @@ typedef enum {
 	color_model_spectral,
 	//! A hybrid approach where I select which assets are rendered in RGB
 	//! and which in spectral form.
-	//color_mode_hybrid,
+	color_model_hybrid,
 	//! Number of different ways to handle color
 	color_model_count,
 } color_model_t;

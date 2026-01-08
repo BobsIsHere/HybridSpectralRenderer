@@ -1957,10 +1957,12 @@ void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_setting
 		nk_label(ctx, illuminant_spectrum->name, NK_TEXT_ALIGN_LEFT);
 		// The way in which color is being handled
 		nk_layout_row_dynamic(ctx, 30, 1);
-		nk_bool spectral = (render_settings->color_model == color_model_spectral);
-		// TODO: Change to take hybrid in account?
-		nk_checkbox_label_align(ctx, "Spectral", &spectral, NK_WIDGET_ALIGN_LEFT, NK_TEXT_ALIGN_LEFT);
-		color_model_t new_color_model = spectral ? color_model_spectral : color_model_rgb;
+		nk_label(ctx, "Color model", NK_TEXT_ALIGN_LEFT);
+		const char* color_models[color_model_count];
+		color_models[color_model_rgb] = "RGB";
+		color_models[color_model_spectral] = "Spectral";
+		color_models[color_model_hybrid] = "Hybrid";
+		color_model_t new_color_model = nk_combo(ctx, color_models, COUNT_OF(color_models), render_settings->color_model, 30, (struct nk_vec2) { .x = 240.0f, .y = 180.0f });
 		if (new_color_model != render_settings->color_model)
 			update->lit_scene = update->scene_subpass = true;
 		render_settings->color_model = new_color_model;
