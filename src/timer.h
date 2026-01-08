@@ -1,4 +1,6 @@
 #pragma once
+
+#include <stdint.h>
 #define RECORDED_FRAME_COUNT 101
 
 
@@ -32,3 +34,5 @@ float get_frame_delta();
 //!		RECORDED_FRAME_COUNT frames or an all 0 object if less than two frames
 //!		have been recorded.
 frame_time_stats_t get_frame_stats();
+
+uint32_t get_recent_frame_times(float* out, uint32_t max_count);

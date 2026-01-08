@@ -1,6 +1,5 @@
 #include "timer.h"
 #include "string_utilities.h"
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #define GLFW_INCLUDE_VULKAN
@@ -85,4 +84,31 @@ frame_time_stats_t get_frame_stats() {
 		(*percentiles[i]) = (1.0f - lerp) * frame_times[left] + lerp * frame_times[right];
 	}
 	return stats;
+}
+
+uint32_t get_recent_frame_times(float* out, uint32_t max_count)
+{
+	if (record.frame_count < 2)
+	{
+		return 0;
+	}
+
+	uint32_t count = (uint32_t)(record.frame_count - 1);
+	if (count > RECORDED_FRAME_COUNT - 1)
+	{
+		count = RECORDED_FRAME_COUNT - 1;
+	}
+	if (count > max_count)
+	{
+		count = max_count;
+	}
+
+	for (uint32_t i = 0; i < count; ++i) 
+	{
+		out[i] = (float)(
+			record.times[(record.time_index + RECORDED_FRAME_COUNT - i - 1) % RECORDED_FRAME_COUNT] -
+			record.times[(record.time_index + RECORDED_FRAME_COUNT - i - 2) % RECORDED_FRAME_COUNT]);
+	}
+
+	return count;
 }

@@ -1861,28 +1861,69 @@ void color_picker(struct nk_context* ctx, float* rgb_color) {
 
 void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_settings_t* render_settings, const illuminant_spectrum_t* illuminant_spectrum, app_update_t* update, const render_targets_t* render_targets, uint64_t timestamps[timestamp_index_count], float timestamp_period) {
 	struct nk_rect bounds = { .x = 20.0f, .y = 20.0f, .w = 400.0f, .h = 380.0f };
-	if (nk_begin(ctx, "Path tracer", bounds, NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE)) {
-		// Display the frame rate and an indicator whether the UI is refreshing
-		nk_layout_row_dynamic(ctx, 30, 2);
-		nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "Frame time: %.2f ms", 1000.0f * get_frame_stats().median);
-		const char* indicator[] = {
-			" .......",
-			". ......",
-			".. .....",
-			"... ....",
-			".... ...",
-			"..... ..",
-			"...... .",
-			"....... ",
-		};
-		static uint32_t frame_index = 0;
-		nk_label(ctx, indicator[frame_index % COUNT_OF(indicator)], NK_TEXT_ALIGN_RIGHT);
-		++frame_index;
-		nk_layout_row_dynamic(ctx, 30, 1);
-		nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "Shading time: %.2f ms", 1.0e-6f * timestamp_period * (float) (timestamps[timestamp_index_shading_end] - timestamps[timestamp_index_shading_begin]));
-		// Display the sample count
-		nk_layout_row_dynamic(ctx, 30, 1);
-		nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "Sample count: %u", render_targets->accum_frame_count);
+	if (nk_begin(ctx, "Path tracer", bounds, NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE)) 
+	{
+		if (nk_tree_push(ctx, NK_TREE_TAB, "Performance", NK_MINIMIZED)) 
+		{
+			frame_time_stats_t fs = get_frame_stats();
+
+			// --- Frame timing (CPU) ---
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "Frame time (last):   %.2f ms", fs.last * 1000.0f);
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "Frame time (median): %.2f ms", fs.median * 1000.0f);
+
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "FPS (median / min / max): %.1f / %.1f / %.1f",
+				1.0f / fs.median,
+				1.0f / fs.max,
+				1.0f / fs.min);
+
+			// --- Percentiles ---
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "Frame time percentiles (ms):");
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "  1%%:  %.2f", fs.percentile_1 * 1000.0f);
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, " 10%%:  %.2f", fs.percentile_10 * 1000.0f);
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, " 90%%:  %.2f", fs.percentile_90 * 1000.0f);
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, " 99%%:  %.2f", fs.percentile_99 * 1000.0f);
+
+			// --- GPU timings ---
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "GPU timings:");
+
+			float shading_ms = 1.0e-6f * timestamp_period * (float)(timestamps[timestamp_index_shading_end] -
+					timestamps[timestamp_index_shading_begin]);
+
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "  Shading: %.2f ms", shading_ms);
+			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "  Sample count: %u", render_targets->accum_frame_count);
+
+			nk_tree_pop(ctx);
+		}
+
+		if (nk_tree_push(ctx, NK_TREE_TAB, "Graphs", NK_MINIMIZED)) 
+		{
+
+			static float frame_times_ms[RECORDED_FRAME_COUNT];
+			uint32_t frame_count = get_recent_frame_times(frame_times_ms, RECORDED_FRAME_COUNT);
+
+			// Convert seconds -> milliseconds
+			for (uint32_t i = 0; i < frame_count; ++i)
+			{
+				frame_times_ms[i] *= 1000.0f;
+			}
+
+			if (frame_count > 1) 
+			{
+				nk_layout_row_dynamic(ctx, 120, 1);
+				nk_plot(ctx, NK_CHART_LINES, frame_times_ms, (int) frame_count, 0);
+			}
+			else 
+			{
+				nk_layout_row_dynamic(ctx, 20, 1);
+				nk_label(ctx, "Not enough data yet", NK_TEXT_ALIGN_LEFT);
+			}
+
+			nk_tree_pop(ctx);
+		}
 		// Define a drop-down menu to select the scene
 		nk_layout_row_dynamic(ctx, 30, 2);
 		const char* scene_names[scene_file_count];
