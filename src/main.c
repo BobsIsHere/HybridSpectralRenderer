@@ -1767,7 +1767,7 @@ int handle_user_input(app_t* app, app_update_t* update) {
 	handle_gui_input(&app->gui, app->window);
 	// Define the GUI
 	if (app->params.gui)
-		define_gui(&app->gui.context, &app->scene_spec, &app->render_settings, &app->illuminant_spectrum, update, &app->render_targets, app->frame_workloads.timestamps, app->device.physical_device_properties.limits.timestampPeriod);
+		define_gui(&app->gui.context, &app, &app->scene_spec, &app->render_settings, &app->illuminant_spectrum, update, &app->render_targets, app->frame_workloads.timestamps, app->device.physical_device_properties.limits.timestampPeriod);
 	// Use camera controls and update corresponding constants
 	control_camera(&app->scene_spec.camera, app->window);
 	// Quicksave and quickload
@@ -1859,71 +1859,100 @@ void color_picker(struct nk_context* ctx, float* rgb_color) {
 }
 
 
-void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_settings_t* render_settings, const illuminant_spectrum_t* illuminant_spectrum, app_update_t* update, const render_targets_t* render_targets, uint64_t timestamps[timestamp_index_count], float timestamp_period) {
+void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, render_settings_t* render_settings, const illuminant_spectrum_t* illuminant_spectrum, app_update_t* update, const render_targets_t* render_targets, uint64_t timestamps[timestamp_index_count], float timestamp_period) {
 	struct nk_rect bounds = { .x = 20.0f, .y = 20.0f, .w = 400.0f, .h = 380.0f };
 	if (nk_begin(ctx, "Path tracer", bounds, NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE | NK_WINDOW_MINIMIZABLE)) 
 	{
-		if (nk_tree_push(ctx, NK_TREE_TAB, "Performance", NK_MINIMIZED)) 
+		if (nk_tree_push(ctx, NK_TREE_TAB, "Performance", NK_MINIMIZED))
 		{
+			performance_capture_t* performance = &app->performance_capture;
+
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_label(ctx, "Measurement control", NK_TEXT_ALIGN_LEFT);
+
+			static int frames_to_capture = 30;
+			nk_property_int(ctx, "Frames per run", 1, &frames_to_capture, 300, 1, 1);
+
+			bool temp = performance->active;
+
+			if (!performance->active)
+			{
+				if (nk_button_label(ctx, "Start capture"))
+				{
+					performance->frames_to_capture = (uint32_t)frames_to_capture;
+					performance->frame_count = 0;
+					performance->active = true;
+
+					for (uint32_t i = 0; i < PERF_MAX_CAPTURE_FRAMES; ++i)
+					{
+						performance->frame_times[i] = 0.0f;
+						performance->shading_ms[i] = 0.0f;
+						performance->post_ms[i] = 0.0f;
+					}
+
+					printf("GUI capture addr: %p\n", &app->performance_capture);
+				}
+			}
+			else
+			{
+				nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
+					"Capturing... (%u / %u)",
+					performance->frame_count, performance->frames_to_capture);
+			}
+
+			// Live rolling stats
 			frame_time_stats_t fs = get_frame_stats();
 
-			// --- Frame timing (CPU) ---
-			nk_layout_row_dynamic(ctx, 20, 1);
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "Frame time (last):   %.2f ms", fs.last * 1000.0f);
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "Frame time (median): %.2f ms", fs.median * 1000.0f);
-
-			nk_layout_row_dynamic(ctx, 20, 1);
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "FPS (median / min / max): %.1f / %.1f / %.1f",
-				1.0f / fs.median,
-				1.0f / fs.max,
-				1.0f / fs.min);
-
-			// --- Percentiles ---
-			nk_layout_row_dynamic(ctx, 20, 1);
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "Frame time percentiles (ms):");
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "  1%%:  %.2f", fs.percentile_1 * 1000.0f);
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, " 10%%:  %.2f", fs.percentile_10 * 1000.0f);
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, " 90%%:  %.2f", fs.percentile_90 * 1000.0f);
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, " 99%%:  %.2f", fs.percentile_99 * 1000.0f);
-
-			// --- GPU timings ---
-			nk_layout_row_dynamic(ctx, 20, 1);
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "GPU timings:");
-
-			float shading_ms = 1.0e-6f * timestamp_period * (float)(timestamps[timestamp_index_shading_end] -
-					timestamps[timestamp_index_shading_begin]);
-
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "  Shading: %.2f ms", shading_ms);
-			nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "  Sample count: %u", render_targets->accum_frame_count);
-
-			nk_tree_pop(ctx);
-		}
-
-		if (nk_tree_push(ctx, NK_TREE_TAB, "Graphs", NK_MINIMIZED)) 
-		{
-
-			static float frame_times_ms[RECORDED_FRAME_COUNT];
-			uint32_t frame_count = get_recent_frame_times(frame_times_ms, RECORDED_FRAME_COUNT);
-
-			// Convert seconds -> milliseconds
-			for (uint32_t i = 0; i < frame_count; ++i)
-			{
-				frame_times_ms[i] *= 1000.0f;
-			}
-
-			if (frame_count > 1) 
-			{
-				nk_layout_row_dynamic(ctx, 120, 1);
-				nk_plot(ctx, NK_CHART_LINES, frame_times_ms, (int) frame_count, 0);
-			}
-			else 
+			// only show if at least two frames have been recorded
+			if (fs.mean > 0.0f) 
 			{
 				nk_layout_row_dynamic(ctx, 20, 1);
-				nk_label(ctx, "Not enough data yet", NK_TEXT_ALIGN_LEFT);
+				nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
+					"Frame time median: %.2f ms", fs.median * 1000.0f);
+
+				nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
+					"FPS median / 1%% low: %.1f / %.1f",
+					1.0f / fs.median, 1.0f / fs.percentile_99);
+			}
+
+			// Captured results (only after full capture)
+			if (performance->frame_count == performance->frames_to_capture)
+			{
+				float cpu_ms[PERF_MAX_CAPTURE_FRAMES];
+				uint32_t valid = 0;
+
+				for (uint32_t i = 0; i < performance->frames_to_capture; ++i)
+				{
+					float t = performance->frame_times[i];
+					if (isfinite(t) && t > 0.0f)
+						cpu_ms[valid++] = t * 1000.0f;
+				}
+
+				if (valid > 0)
+				{
+					float cpu_mean = mean(cpu_ms, valid);
+					float cpu_p95 = percentile(cpu_ms, valid, 0.95f);
+
+					nk_layout_row_dynamic(ctx, 20, 1);
+					nk_label(ctx, "Captured run results", NK_TEXT_ALIGN_LEFT);
+
+					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
+						"CPU frame time mean / 95%%: %.2f / %.2f ms",
+						cpu_mean, cpu_p95);
+
+					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "GPU stage times (avg ms):");
+					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
+						"  Shading:        %.2f",
+						mean(performance->shading_ms, valid));
+					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
+						"  Post-process:   %.2f",
+						mean(performance->post_ms, valid));
+				}
 			}
 
 			nk_tree_pop(ctx);
 		}
+
 		// Define a drop-down menu to select the scene
 		nk_layout_row_dynamic(ctx, 30, 2);
 		const char* scene_names[scene_file_count];
@@ -2019,6 +2048,39 @@ void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_setting
 }
 
 
+void update_performance_capture(app_t* app, float frame_time, float shading_ms, float post_ms)
+{
+	performance_capture_t* performance = &app->performance_capture;
+
+	/*printf("perf active=%d frame=%u/%u\n",
+		performance->active,
+		performance->frame_count,
+		performance->frames_to_capture);*/
+
+	printf("UPDATE capture addr: %p\n", performance);
+
+	if (!performance->active)
+	{
+		return;
+	}
+
+	if (performance->frame_count < performance->frames_to_capture)
+	{
+		performance->frame_times[performance->frame_count] = frame_time;
+		performance->shading_ms[performance->frame_count] = shading_ms;
+		performance->post_ms[performance->frame_count] = post_ms;
+
+		++performance->frame_count;
+
+		// Stop automatically if we just captured the last frame
+		if (performance->frame_count >= performance->frames_to_capture)
+		{
+			performance->active = false;
+		}
+	}
+}
+
+
 //! Fills a command buffer for rendering a single frame
 VkResult record_render_frame_commands(app_t* app, frame_workload_t* frame, uint32_t swapchain_image_index, uint32_t workload_index) {
 	// Begin recording into the command buffer anew
@@ -2090,7 +2152,9 @@ VkResult record_render_frame_commands(app_t* app, frame_workload_t* frame, uint3
 	vkCmdNextSubpass(cmd, VK_SUBPASS_CONTENTS_INLINE);
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, app->tonemap_subpass.pipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, app->tonemap_subpass.descriptor_set.pipeline_layout, 0, 1, app->tonemap_subpass.descriptor_set.descriptor_sets, 0, NULL);
+	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, frame->query_pool, timestamp_index_post_begin);
 	vkCmdDraw(cmd, 3, 1, 0, 0);
+	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, frame->query_pool, timestamp_index_post_end);
 	// Render the GUI
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, app->gui_subpass.pipeline);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, app->gui_subpass.descriptor_set.pipeline_layout, 0, 1, app->gui_subpass.descriptor_set.descriptor_sets, 0, NULL);
@@ -2188,6 +2252,23 @@ VkResult render_frame(app_t* app, app_update_t* update) {
 
 		save_screenshot(screenshot_path, image_file_format_png, device, &app->render_targets, &app->scene_spec);
 	}
+
+	// Record CPU frame time
+	// update ring buffer
+	record_frame_time();
+	float cpu_ms = get_frame_delta() * 1000.0f;
+
+	// Compute GPU stage times in milliseconds
+	float shading_ms = (app->frame_workloads.timestamps[timestamp_index_shading_end] -
+		app->frame_workloads.timestamps[timestamp_index_shading_begin])
+		* device->timestamp_period * 1e-6f;
+	float post_ms = (app->frame_workloads.timestamps[timestamp_index_post_end] -
+		app->frame_workloads.timestamps[timestamp_index_post_begin])
+		* device->timestamp_period * 1e-6f;
+
+	// Store into performance capture
+	update_performance_capture(&app, cpu_ms, shading_ms, post_ms);
+
 	// All done
 	++app->frame_workloads.frame_index;
 	return VK_SUCCESS;

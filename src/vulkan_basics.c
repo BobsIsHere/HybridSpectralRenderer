@@ -57,6 +57,8 @@ int create_device(device_t* device, const char* app_name, uint32_t physical_devi
 	for (uint32_t i = 0; i != device->physical_device_count; ++i) {
 		VkPhysicalDeviceProperties props;
 		vkGetPhysicalDeviceProperties(device->physical_devices[i], &props);
+		device->timestamp_period = props.limits.timestampPeriod;
+
 		printf("%u%s %s\n", i, (i == physical_device_index) ? " (used):" : ":       ", props.deviceName);
 		if (i == physical_device_index)
 			device->physical_device_properties = props;

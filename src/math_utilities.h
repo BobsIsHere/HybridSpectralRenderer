@@ -75,3 +75,9 @@ static inline float half_to_float(uint16_t half) {
 	o.u |= (half & 0x8000) << 16;
 	return o.f;
 }
+
+float mean(const float* v, uint32_t n);
+
+int cmp_float(const void* a, const void* b);
+
+float percentile(float* v, uint32_t n, float p);

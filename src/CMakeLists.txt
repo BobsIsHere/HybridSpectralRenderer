@@ -37,4 +37,4 @@ target_sources(path_tracer PRIVATE
 	shaders/srgb_utility.glsl
 	shaders/tonemap.frag.glsl
 	shaders/tonemap.vert.glsl
-)
+  )

@@ -12,6 +12,8 @@
 
 //! Gathers Vulkan objects created up to device creation including meta data
 typedef struct {
+	float timestamp_period;
+
 	//! The instance used to invoke Vulkan functions
 	VkInstance instance;
 	//! All physical devices enumerated by vkEnumeratePhysicalDevices()

@@ -17,6 +17,8 @@
 #define MAX_SLIDE_COUNT 100
 //! the amount of samples for taking a screenshot
 #define SCREENSHOT_SAMPLE_COUNT 1200
+//! The maximal number of frames that can be captured for performance
+#define PERF_MAX_CAPTURE_FRAMES 300
 
 
 //! An enumeration of available scenes (i.e. *.vks files)
@@ -385,7 +387,12 @@ typedef struct {
 //! Indices for timestamp queries in query pools
 typedef enum {
 	//! Encloses the commands that perform the main shading work
-	timestamp_index_shading_begin, timestamp_index_shading_end,
+	//! Spectral and conversion are included inside shading
+	timestamp_index_shading_begin,
+	timestamp_index_shading_end,
+
+	timestamp_index_post_begin,
+	timestamp_index_post_end,
 	//! The number of used timestamps
 	timestamp_index_count,
 } timestamp_index_t;
@@ -422,6 +429,21 @@ typedef struct {
 } frame_workloads_t;
 
 
+//! Holds performance capture data
+typedef struct {
+	bool active;
+	uint32_t frames_to_capture;
+	uint32_t frame_count;
+
+	// CPU frame times (seconds)
+	float frame_times[PERF_MAX_CAPTURE_FRAMES];
+
+	// GPU stage times (milliseconds)
+	float shading_ms[PERF_MAX_CAPTURE_FRAMES];
+	float post_ms[PERF_MAX_CAPTURE_FRAMES];
+} performance_capture_t;
+
+
 //! All state of the application that has a chance of persisting across a frame
 //! is found somewhere in the depths of this structure
 typedef struct {
@@ -447,6 +469,7 @@ typedef struct {
 	tonemap_subpass_t tonemap_subpass;
 	gui_subpass_t gui_subpass;
 	frame_workloads_t frame_workloads;
+	performance_capture_t performance_capture;
 } app_t;
 
 
@@ -667,8 +690,8 @@ int handle_user_input(app_t* app, app_update_t* update);
 	\param render_targets Used to query the sample count.
 	\param timestamps The timestamps from frame_workloads_t.
 	\param timestamp_period The value from VkPhysicalDeviceLimits::timestampPeriod.*/
-void define_gui(struct nk_context* ctx, scene_spec_t* scene_spec, render_settings_t* render_settings, const illuminant_spectrum_t* illuminant_spectrum, app_update_t* update, const render_targets_t* render_targets, uint64_t timestamps[timestamp_index_count], float timestamp_period);
-
+void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, render_settings_t* render_settings, const illuminant_spectrum_t* illuminant_spectrum, app_update_t* update, const render_targets_t* render_targets, uint64_t timestamps[timestamp_index_count], float timestamp_period);
+void update_performance_capture(app_t* app, float frame_time, float shading_ms, float post_ms);
 
 /*! Updates constant buffers, takes care of synchronization, renders a single
 	frame and presents it.

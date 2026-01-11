@@ -201,3 +201,30 @@ void invert_mat4(float out_inv[4 * 4], float mat[4 * 4]) {
 	for (uint32_t i = 0; i != 4 * 4; ++i)
 		out_inv[i] *= scale;
 }
+
+float mean(const float* v, uint32_t n)
+{
+	float s = 0.f;
+	for (uint32_t i = 0; i < n; ++i)
+	{
+		s += v[i];
+	}
+
+	return s / (float)n;
+}
+
+int cmp_float(const void* a, const void* b)
+{
+	float fa = *(const float*)a;
+	float fb = *(const float*)b;
+
+	return (fa > fb) - (fa < fb);
+}
+
+float percentile(float* v, uint32_t n, float p)
+{
+	qsort(v, n, sizeof(float), cmp_float);
+	uint32_t idx = (uint32_t)(p * (n - 1));
+
+	return v[idx];
+}
