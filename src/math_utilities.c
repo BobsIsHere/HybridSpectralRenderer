@@ -213,7 +213,7 @@ float mean(const float* v, uint32_t n)
 	return s / (float)n;
 }
 
-int cmp_float(const void* a, const void* b)
+int compare_float(const void* a, const void* b)
 {
 	float fa = *(const float*)a;
 	float fb = *(const float*)b;
@@ -221,10 +221,17 @@ int cmp_float(const void* a, const void* b)
 	return (fa > fb) - (fa < fb);
 }
 
-float percentile(float* v, uint32_t n, float p)
+float percentile_sorted(const float* sorted, uint32_t count, float percentile)
 {
-	qsort(v, n, sizeof(float), cmp_float);
-	uint32_t idx = (uint32_t)(p * (n - 1));
+	if (count == 0)
+	{
+		return 0.0f;
+	}
 
-	return v[idx];
+	float idx = percentile * (count - 1);
+	uint32_t i0 = (uint32_t)idx;
+	uint32_t i1 = (i0 + 1 < count) ? i0 + 1 : i0;
+	float frac = idx - (float)i0;
+
+	return sorted[i0] * (1.0f - frac) + sorted[i1] * frac;
 }

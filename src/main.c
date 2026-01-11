@@ -1870,7 +1870,7 @@ void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, re
 			nk_layout_row_dynamic(ctx, 20, 1);
 			nk_label(ctx, "Measurement control", NK_TEXT_ALIGN_LEFT);
 
-			static int frames_to_capture = 30;
+			static int frames_to_capture = 300;
 			nk_property_int(ctx, "Frames per run", 1, &frames_to_capture, 300, 1, 1);
 
 			bool temp = performance->active;
@@ -1889,8 +1889,6 @@ void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, re
 						performance->shading_ms[i] = 0.0f;
 						performance->post_ms[i] = 0.0f;
 					}
-
-					printf("GUI capture addr: %p\n", &app->performance_capture);
 				}
 			}
 			else
@@ -1918,35 +1916,47 @@ void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, re
 			// Captured results (only after full capture)
 			if (performance->frame_count == performance->frames_to_capture)
 			{
-				float cpu_ms[PERF_MAX_CAPTURE_FRAMES];
+				float cpu_frame_ms[PERF_MAX_CAPTURE_FRAMES];
+				float shading_ms[PERF_MAX_CAPTURE_FRAMES];
+				float post_ms[PERF_MAX_CAPTURE_FRAMES];
 				uint32_t valid = 0;
 
 				for (uint32_t i = 0; i < performance->frames_to_capture; ++i)
 				{
-					float t = performance->frame_times[i];
-					if (isfinite(t) && t > 0.0f)
-						cpu_ms[valid++] = t * 1000.0f;
+					float cpu_s = performance->frame_times[i];
+
+					if (isfinite(cpu_s) && cpu_s > 0.0f)
+					{
+						// seconds -> ms
+						cpu_frame_ms[valid] = cpu_s * 1000.0f; 
+						shading_ms[valid] = performance->shading_ms[i];
+						post_ms[valid] = performance->post_ms[i];
+
+						++valid;
+					}
 				}
 
 				if (valid > 0)
 				{
-					float cpu_mean = mean(cpu_ms, valid);
-					float cpu_p95 = percentile(cpu_ms, valid, 0.95f);
+					// Sort CPU frame times for percentile computation
+					qsort(cpu_frame_ms, valid, sizeof(float), compare_float);
+
+					float cpu_mean = mean(cpu_frame_ms, valid);
+					float cpu_p95 = percentile_sorted(cpu_frame_ms, valid, 0.95f);
+
+					float shading_mean = mean(shading_ms, valid);
+					float post_mean = mean(post_ms, valid);
 
 					nk_layout_row_dynamic(ctx, 20, 1);
-					nk_label(ctx, "Captured run results", NK_TEXT_ALIGN_LEFT);
+					nk_label(ctx, "Captured run results (per-frame)", NK_TEXT_ALIGN_LEFT);
 
-					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
-						"CPU frame time mean / 95%%: %.2f / %.2f ms",
-						cpu_mean, cpu_p95);
+					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "CPU frame time (ms): mean %.2f / 95th %.2f", cpu_mean, cpu_p95);
 
-					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "GPU stage times (avg ms):");
-					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
-						"  Shading:        %.2f",
-						mean(performance->shading_ms, valid));
-					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
-						"  Post-process:   %.2f",
-						mean(performance->post_ms, valid));
+					nk_layout_row_dynamic(ctx, 20, 1);
+					nk_label(ctx, "GPU stage times (avg per frame, ms):", NK_TEXT_ALIGN_LEFT);
+
+					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "  Shading:      %.2f", shading_mean);
+					nk_labelf(ctx, NK_TEXT_ALIGN_LEFT, "  Post-process: %.2f", post_mean);
 				}
 			}
 
@@ -2051,13 +2061,6 @@ void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, re
 void update_performance_capture(app_t* app, float frame_time, float shading_ms, float post_ms)
 {
 	performance_capture_t* performance = &app->performance_capture;
-
-	/*printf("perf active=%d frame=%u/%u\n",
-		performance->active,
-		performance->frame_count,
-		performance->frames_to_capture);*/
-
-	printf("UPDATE capture addr: %p\n", performance);
 
 	if (!performance->active)
 	{
@@ -2255,19 +2258,20 @@ VkResult render_frame(app_t* app, app_update_t* update) {
 
 	// Record CPU frame time
 	// update ring buffer
-	record_frame_time();
-	float cpu_ms = get_frame_delta() * 1000.0f;
+	const float cpu_delta = get_frame_delta();
+	
+	//record_frame_time();
 
 	// Compute GPU stage times in milliseconds
-	float shading_ms = (app->frame_workloads.timestamps[timestamp_index_shading_end] -
+	const float shading_ms = (app->frame_workloads.timestamps[timestamp_index_shading_end] -
 		app->frame_workloads.timestamps[timestamp_index_shading_begin])
 		* device->timestamp_period * 1e-6f;
-	float post_ms = (app->frame_workloads.timestamps[timestamp_index_post_end] -
+	const float post_ms = (app->frame_workloads.timestamps[timestamp_index_post_end] -
 		app->frame_workloads.timestamps[timestamp_index_post_begin])
 		* device->timestamp_period * 1e-6f;
 
 	// Store into performance capture
-	update_performance_capture(&app, cpu_ms, shading_ms, post_ms);
+	update_performance_capture(&app, cpu_delta, shading_ms, post_ms);
 
 	// All done
 	++app->frame_workloads.frame_index;

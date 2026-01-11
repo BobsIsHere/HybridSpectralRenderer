@@ -78,6 +78,6 @@ static inline float half_to_float(uint16_t half) {
 
 float mean(const float* v, uint32_t n);
 
-int cmp_float(const void* a, const void* b);
+int compare_float(const void* a, const void* b);
 
-float percentile(float* v, uint32_t n, float p);
+float percentile_sorted(const float* sorted, uint32_t count, float percentile);
