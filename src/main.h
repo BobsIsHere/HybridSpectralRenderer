@@ -717,3 +717,17 @@ int save_screenshot(const char* file_path, image_file_format_t format, const dev
 
 
 void free_screenshot(screenshot_t* screenshot, const device_t* device);
+
+void export_capture_to_csv(const performance_capture_t* capture, const char* scene_name);
+char* get_scene_name(scene_file_t scene);
+
+static const char* scene_file_names[scene_file_count] = {
+	[scene_file_bistro_outside] = "bistro_outside",
+	[scene_file_bistro_outside_1_light] = "bistro_outside_1_light",
+	[scene_file_cornell_box] = "cornell_box",
+	[scene_file_arcade] = "arcade",
+	[scene_file_attic] = "attic",
+	[scene_file_bistro_inside] = "bistro_inside",
+	[scene_file_living_room_day] = "living_room_day",
+	[scene_file_living_room_night] = "living_room_night"
+};

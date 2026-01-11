@@ -9,6 +9,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include <io.h>
+#include <time.h>
 
 
 int get_scene_file(scene_file_t scene_file, const char** scene_name, const char** scene_file_path, const char** texture_path, const char** light_path, const char** quicksave_path) {
@@ -1960,6 +1962,12 @@ void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, re
 				}
 			}
 
+			if (nk_button_label(ctx, "Export CSV"))
+			{
+				const char* scene_name = get_scene_name(scene_spec->scene_file);
+				export_capture_to_csv(&app->performance_capture, scene_name);
+			}
+
 			nk_tree_pop(ctx);
 		}
 
@@ -2404,6 +2412,63 @@ void free_screenshot(screenshot_t* screenshot, const device_t* device) {
 	free(screenshot->ldr_copy);
 	free(screenshot->hdr_copy);
 	memset(screenshot, 0, sizeof(*screenshot));
+}
+
+void export_capture_to_csv(const performance_capture_t* capture, const char* scene_name)
+{
+	const char* folder = "C:/GitHubFiles/GradWork/HybridSpectralRenderer/data/capture_saves";
+
+	char path[1024];
+	int suffix = 0;
+
+	do
+	{
+		if (suffix == 0)
+		{
+			snprintf(path, sizeof(path), "%s/%s.csv", folder, scene_name);
+		}
+		else
+		{
+			snprintf(path, sizeof(path), "%s/%s_%d.csv", folder, scene_name, suffix);
+		}
+
+		suffix++;
+	} while (access(path, 0) == 0);
+
+
+	FILE* file = fopen(path, "a");
+	if (!file)
+	{
+		fprintf(stderr, "Failed to open file for writing: %s\n", path);
+		return;
+	}
+
+	// Add a timestamp header for this capture run
+	time_t now = time(NULL);
+	struct tm* local_time = localtime(&now);
+
+	fprintf(file, "\n# Capture run: %02d-%02d %02d:%02d:%02d\n",
+		local_time->tm_mday, local_time->tm_mon + 1,
+		local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
+
+	fprintf(file, "frame,frame_time_ms,shading_ms,post_ms\n");
+
+	for (uint32_t i = 0; i < capture->frame_count; ++i)
+	{
+		fprintf(file, "%u,%.6f,%.6f,%.6f\n",
+			i, capture->frame_times[i], capture->shading_ms[i], capture->post_ms[i]);
+	}
+
+	fclose(file);
+	printf("Performance capture exported to: %s\n", path);
+}
+
+
+char* get_scene_name(scene_file_t scene)
+{
+	if (scene < 0 || scene >= scene_file_count)
+		return "unknown_scene";
+	return scene_file_names[scene];
 }
 
 
