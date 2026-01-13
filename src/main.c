@@ -1071,12 +1071,13 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		binding->binding = MESH_BINDING_START + i;
 		binding->descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
 	}
+	// The material metadata buffer
 	bindings[MESH_BINDING_START + mesh_buffer_type_count] =
-		(VkDescriptorSetLayoutBinding){
-			.binding = MATERIAL_COLOR_MODE_BINDING, // == 7
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	(VkDescriptorSetLayoutBinding){
+		.binding = MATERIAL_COLOR_MODE_BINDING, // == 7
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 	};
 	complete_descriptor_set_layout_bindings(bindings, COUNT_OF(bindings), 1, VK_SHADER_STAGE_FRAGMENT_BIT);
 	if (create_descriptor_sets(&subpass->descriptor_set, device, bindings, COUNT_OF(bindings), 1)) {
@@ -1105,7 +1106,12 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		.imageView = spectrum->spectrum.images[0].view,
 		.sampler = subpass->spectra_sampler,
 	};
-	VkWriteDescriptorSet writes[MESH_BINDING_START + mesh_buffer_type_count] = {
+	VkDescriptorBufferInfo material_color_mode_info = {
+		.buffer = scene->material_metadata.buffers,
+		.offset = 0,
+		.range = VK_WHOLE_SIZE,
+	};
+	VkWriteDescriptorSet writes[MESH_BINDING_START + mesh_buffer_type_count + 1] = {
 		{ .dstBinding = 0, .pBufferInfo = &constant_buffer_info, },
 		{ .dstBinding = 1, .pImageInfo = image_infos, },
 		{ .dstBinding = 2, .pNext = &bvh_info, },
@@ -1116,6 +1122,10 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		write->dstBinding = MESH_BINDING_START + i;
 		write->pTexelBufferView = &scene->mesh_buffers.buffers[i].view;
 	}
+	writes[MESH_BINDING_START + mesh_buffer_type_count] = (VkWriteDescriptorSet){
+		.dstBinding = MATERIAL_COLOR_MODE_BINDING,
+		.pBufferInfo = &material_color_mode_info,
+	};
 	complete_descriptor_set_writes(writes, COUNT_OF(writes), bindings, COUNT_OF(bindings), subpass->descriptor_set.descriptor_sets[0]);
 	vkUpdateDescriptorSets(device->device, COUNT_OF(writes), writes, 0, NULL);
 	free(image_infos);
@@ -1130,7 +1140,7 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		format_uint("EMISSION_MATERIAL_INDEX=%u", emission_material_index),
 		format_uint("SPHERICAL_LIGHT_COUNT=%u", lit_scene->spherical_light_count),
 		format_uint("PATH_LENGTH=%u", render_settings->path_length),
-		//TOD: add hybrid color mode?
+		//TODO: add hybrid color mode?
 		format_uint("COLOR_MODEL_RGB=%u", render_settings->color_model == color_model_rgb),
 		format_uint("COLOR_MODEL_SPECTRAL=%u", render_settings->color_model == color_model_spectral),
 		format_uint("WAVELENGTH_SAMPLE_COUNT=%u", render_settings->wavelength_sample_count),

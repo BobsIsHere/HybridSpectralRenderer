@@ -417,6 +417,7 @@ void free_scene(scene_t* scene, const device_t* device) {
 
 
 void free_scene_loader(scene_loader_t* loader, const device_t* device) {
+	if (!loader) return;
 	if (loader->scene) free_scene(loader->scene, device);
 	free(loader->quantized_poss);
 	if (loader->file) fclose(loader->file);
