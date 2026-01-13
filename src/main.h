@@ -110,6 +110,8 @@ typedef struct {
 	//! The maximal number of vertices along a path, excluding the one at the
 	//! eye
 	uint32_t path_length;
+
+	bool allow_spectral_materials;
 } render_settings_t;
 
 
@@ -492,6 +494,11 @@ typedef struct {
 	uint8_t* ldr_copy;
 } screenshot_t;
 
+typedef struct 
+{
+	const uint32_t* data;
+} material_upload_ctx_t;
+
 
 /*! Outputs the name, the path to the *.vks file, to the textures, to the
 	lights and to the quicksave for the given scene file. Returns 0 upon
@@ -720,6 +727,7 @@ void free_screenshot(screenshot_t* screenshot, const device_t* device);
 
 void export_capture_to_csv(const performance_capture_t* capture, const char* scene_name);
 char* get_scene_name(scene_file_t scene);
+static void write_material_metadata(void* buffer_data, uint32_t buffer_index, VkDeviceSize buffer_size, const void* context);
 
 static const char* scene_file_names[scene_file_count] = {
 	[scene_file_bistro_outside] = "bistro_outside",

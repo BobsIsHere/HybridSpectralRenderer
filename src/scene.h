@@ -61,6 +61,15 @@ typedef enum {
 } material_texture_type_t;
 
 
+//! The different modes in which material colors can be represented
+typedef enum
+{
+	material_color_rgb = 0,
+	material_color_spectral = 1,
+} material_color_mode_t;
+material_color_mode_t color_model;
+
+
 //! The levels of acceleration structures in Vulkan (top and bottom level)
 typedef enum {
 	//! Bottom-level acceleration structure (BLAS)
@@ -90,6 +99,8 @@ typedef struct {
 	buffers_t mesh_buffers;
 	//! material_texture_type_count consecutive textures per material
 	images_t textures;
+	//! Per-material color model (RGB / Spectral)
+	buffers_t material_metadata;
 	//! The ray-tracing acceleration structures
 	bvhs_t bvhs;
 } scene_t;

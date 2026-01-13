@@ -12,6 +12,10 @@ layout (binding = 4) uniform utextureBuffer g_quantized_vertex_poss;
 layout (binding = 5) uniform textureBuffer g_octahedral_normal_and_tex_coords;
 //! Provides a material index for each triangle
 layout (binding = 6) uniform utextureBuffer g_material_indices;
+//! Per-material color model (0 = RGB, 1 = Spectral)
+layout (binding = 7) readonly buffer MaterialColorModes {
+	uint g_material_color_mode[];
+};
 
 
 //! Full description of a shading point on a surface and its BRDF. All vectors
@@ -29,6 +33,8 @@ struct shading_data_t {
 	//! Whether the material emits light or not. In this simple renderer, all
 	//! emissive materials use the same illuminant spectrum.
 	bool emission;
+	//! color representation for this material
+	uint color_model;
 	//! The base color. For RGB rendering, the color space is linear sRGB
 	//! (a.k.a. Rec. 709), for spectral rendering it is Fourier sRGB.
 	vec3 base_color;
@@ -74,6 +80,8 @@ shading_data_t get_shading_data(int triangle_index, vec2 barycentrics, bool fron
 	normal_geo = normalize(normal_geo);
 	// Sample the material textures
 	uint material_index = texelFetch(g_material_indices, triangle_index).r;
+	uint material_color_mode = g_material_color_mode[material_index];
+	s.color_model = material_color_mode;
 	s.base_color = texture(g_textures[nonuniformEXT(3 * material_index + 0)], tex_coord).rgb;
 	vec3 specular_tex = texture(g_textures[nonuniformEXT(3 * material_index + 1)], tex_coord).rgb;
 	vec2 normal_tex = texture(g_textures[nonuniformEXT(3 * material_index + 2)], tex_coord).rg;

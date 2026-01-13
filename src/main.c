@@ -792,14 +792,67 @@ int create_lit_scene(lit_scene_t* lit_scene, const device_t* device, const scene
 	// Figure out what suffixes go after material names to get texture names
 	const char* suffixes[material_texture_type_count];
 	suffixes[material_texture_type_base_color] = "_BaseColor.vkt";
-	if (settings->color_model == color_model_spectral)
+	/*if (settings->color_model == color_model_spectral)
+	{
 		suffixes[material_texture_type_base_color] = "_BaseColorFourierSRGB.vkt";
+	}*/
 	suffixes[material_texture_type_specular] = "_Specular.vkt";
 	suffixes[material_texture_type_normal] = "_Normal.vkt";
 	// Load the scene
 	int result = load_scene(&lit_scene->scene, device, scene_path, textures_path, suffixes);
 	if (!result)
 		printf("Loaded %lu triangles and %lu materials from %s.\n", lit_scene->scene.header.triangle_count, lit_scene->scene.header.material_count, scene_path);
+
+	buffer_request_t material_req = {
+	.buffer_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = sizeof(uint32_t) * lit_scene->scene.header.material_count,
+		.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+				 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+	},
+	};
+
+	if (create_buffers(&lit_scene->scene.material_metadata, device,&material_req,
+		1,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,1)) 
+	{
+		printf("Failed to create material metadata buffer.\n");
+		return 1;
+	}
+
+	uint32_t* material_modes = malloc(sizeof(uint32_t) * lit_scene->scene.header.material_count);
+
+	for (uint32_t i = 0; i < lit_scene->scene.header.material_count; ++i) 
+	{
+		bool is_dispersive = strstr(lit_scene->scene.header.material_names[i], "glass") ||
+			strstr(lit_scene->scene.header.material_names[i], "prism");
+
+		if (settings->color_model == color_model_hybrid) 
+		{
+			material_modes[i] =
+				is_dispersive ? material_color_spectral : material_color_rgb;
+		}
+		else 
+		{
+			material_modes[i] = (settings->color_model == color_model_spectral)
+				? material_color_spectral : material_color_rgb;
+		}
+	}
+
+	material_upload_ctx_t upload_ctx = {
+	.data = material_modes
+	};
+
+	if (fill_buffers(&lit_scene->scene.material_metadata, device,
+		&write_material_metadata,&upload_ctx)) 
+	{
+		printf("Failed to upload material metadata.\n");
+		free(material_modes);
+
+		return 1;
+	}
+
+	free(material_modes);
+
 	return result;
 }
 
@@ -997,7 +1050,8 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 	}
 	// Create a descriptor set
 	#define MESH_BINDING_START 4
-	VkDescriptorSetLayoutBinding bindings[MESH_BINDING_START + mesh_buffer_type_count] = {
+	#define MATERIAL_COLOR_MODE_BINDING 7
+	VkDescriptorSetLayoutBinding bindings[MESH_BINDING_START + mesh_buffer_type_count + 1] = {
 		// The constant buffer
 		{ .binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER },
 		// All material textures
@@ -1017,6 +1071,13 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		binding->binding = MESH_BINDING_START + i;
 		binding->descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
 	}
+	bindings[MESH_BINDING_START + mesh_buffer_type_count] =
+		(VkDescriptorSetLayoutBinding){
+			.binding = MATERIAL_COLOR_MODE_BINDING, // == 7
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	};
 	complete_descriptor_set_layout_bindings(bindings, COUNT_OF(bindings), 1, VK_SHADER_STAGE_FRAGMENT_BIT);
 	if (create_descriptor_sets(&subpass->descriptor_set, device, bindings, COUNT_OF(bindings), 1)) {
 		printf("Failed to create a descriptor set for the scene subpass.\n");
@@ -2469,6 +2530,13 @@ char* get_scene_name(scene_file_t scene)
 	if (scene < 0 || scene >= scene_file_count)
 		return "unknown_scene";
 	return scene_file_names[scene];
+}
+
+
+void write_material_metadata(void* buffer_data, uint32_t buffer_index, VkDeviceSize buffer_size, const void* context)
+{
+	const material_upload_ctx_t* ctx = context;
+	memcpy(buffer_data, ctx->data, buffer_size);
 }
 
 
