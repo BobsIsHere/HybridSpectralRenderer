@@ -80,9 +80,9 @@ shading_data_t get_shading_data(int triangle_index, vec2 barycentrics, bool fron
 	normal_geo = normalize(normal_geo);
 	// Sample the material textures
 	uint material_index = texelFetch(g_material_indices, triangle_index).r;
-	uint material_color_mode = g_material_color_mode[material_index];
-	s.color_model = material_color_mode;
+	s.color_model = g_material_color_mode[material_index];
 	s.base_color = texture(g_textures[nonuniformEXT(3 * material_index + 0)], tex_coord).rgb;
+	//s.base_color = s.color_model == 0u ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
 	vec3 specular_tex = texture(g_textures[nonuniformEXT(3 * material_index + 1)], tex_coord).rgb;
 	vec2 normal_tex = texture(g_textures[nonuniformEXT(3 * material_index + 2)], tex_coord).rg;
 	vec3 normal_local;

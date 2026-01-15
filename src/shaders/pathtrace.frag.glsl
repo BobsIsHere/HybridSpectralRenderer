@@ -188,13 +188,21 @@ bool trace_ray(out shading_data_t out_shading_data, vec3 ray_origin, vec3 ray_di
 	rayQueryEXT ray_query;
 	rayQueryInitializeEXT(ray_query, g_bvh, gl_RayFlagsOpaqueEXT, 0xff, ray_origin, 1.0e-3, ray_dir, 1e38);
 	while (rayQueryProceedEXT(ray_query)) {}
+
 	// If there was no hit, use the sky color
-	if (rayQueryGetIntersectionTypeEXT(ray_query, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
-		out_shading_data.emission = false;
+	if (rayQueryGetIntersectionTypeEXT(ray_query, true) == gl_RayQueryCommittedIntersectionNoneEXT) 
+	{
+		out_shading_data.pos        = vec3(0.0);
+		out_shading_data.normal     = vec3(0.0, 1.0, 0.0);
+		out_shading_data.base_color = vec3(0.0);
+		out_shading_data.emission   = false;
+		out_shading_data.color_model = 0; // RGB sky
+
 		return false;
 	}
 	// Construct shading data
-	else {
+	else 
+	{
 		int triangle_index = rayQueryGetIntersectionPrimitiveIndexEXT(ray_query, true);
 		vec2 barys = rayQueryGetIntersectionBarycentricsEXT(ray_query, true);
 		bool front = rayQueryGetIntersectionFrontFaceEXT(ray_query, true);
@@ -285,17 +293,29 @@ vec3 path_trace_nee(vec3 ray_origin, vec3 ray_dir, inout uvec2 seed)
 			}
 		} 
 
-		// Evaluate the reflectance spectrum at the hit point for the sampled
-		// wavelengths
+		// Evaluate the reflectance spectrum at the hit point for the sampled wavelengths
 		float reflectance[WAVELENGTH_SAMPLE_COUNT];
-		if (s.color_model == 1) 
+		if (s.color_model == 1)
 		{
+			// Spectral material
 			vec3 fourier = fourier_srgb_to_fourier(s.base_color);
 			vec3 lagranges = prep_reflectance_real_lagrange_biased_3(fourier);
+
 			[[unroll]]
 			for (uint i = 0; i != WAVELENGTH_SAMPLE_COUNT; ++i)
 			{
 				reflectance[i] = eval_reflectance_real_lagrange_3(rgb_and_phases[i].a, lagranges);
+			}
+		}
+		else
+		{
+			// RGB material -> flat spectrum
+			float flat_reflectance  = dot(s.base_color, vec3(0.2126, 0.7152, 0.0722));
+
+			[[unroll]]
+			for (uint i = 0; i != WAVELENGTH_SAMPLE_COUNT; ++i)
+			{
+				reflectance[i] = flat_reflectance ;
 			}
 		}
 
@@ -394,6 +414,7 @@ void main() {
 	vec2 randoms = 2.0 * get_random_numbers(seed) - vec2(1.0);
 	vec2 jitter = (std * sqrt(2.0)) * vec2(erfinv(randoms.x), erfinv(randoms.y));
 	vec2 jittered = gl_FragCoord.xy + jitter;
+
 	// Compute the primary ray using either a pinhole camera or a hemispherical
 	// camera
 	vec3 ray_origin, ray_dir;
@@ -408,6 +429,15 @@ void main() {
 		vec2 sphere_factor = vec2(1.0, (g_camera_type == 3) ? 2.0 : 1.0);
 		ray_dir = hemisphere_to_world_space * sample_hemisphere_spherical(jittered * sphere_factor * g_inv_viewport_size);
 	}
+
+	// DEBUG: material color model test
+	//shading_data_t s;
+	//if (trace_ray(s, ray_origin, ray_dir)) 
+	//{
+	//	g_out_color = vec4(s.base_color, 1.0);
+	//	return;
+	//}
+
 	// Perform path tracing
 	vec3 ray_radiance = path_trace_nee(ray_origin, ray_dir, seed);
 	g_out_color = vec4(ray_radiance, 1.0);

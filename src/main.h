@@ -479,7 +479,7 @@ typedef struct {
 	the boolean is true, the object and all objects that depend on it will be
 	freed and recreated by update_app().*/
 typedef struct {
-	bool device, window, gui, swapchain, render_targets, constant_buffers, illuminant_spectrum, lit_scene, render_pass, scene_subpass, tonemap_subpass, gui_subpass, frame_workloads;
+	bool device, window, gui, swapchain, render_targets, constant_buffers, illuminant_spectrum, lit_scene, render_pass, scene_subpass, tonemap_subpass, gui_subpass, frame_workloads, material_metadata;
 } app_update_t;
 
 
@@ -728,6 +728,9 @@ void free_screenshot(screenshot_t* screenshot, const device_t* device);
 void export_capture_to_csv(const performance_capture_t* capture, const char* scene_name);
 char* get_scene_name(scene_file_t scene);
 static void write_material_metadata(void* buffer_data, uint32_t buffer_index, VkDeviceSize buffer_size, const void* context);
+
+void build_material_color_modes(uint32_t* material_modes, const scene_t* scene, const render_settings_t* settings);
+void update_material_color_modes(lit_scene_t* lit_scene, const device_t* device, const render_settings_t* settings);
 
 static const char* scene_file_names[scene_file_count] = {
 	[scene_file_bistro_outside] = "bistro_outside",

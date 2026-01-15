@@ -773,10 +773,12 @@ int create_lit_scene(lit_scene_t* lit_scene, const device_t* device, const scene
 	const char* scene_path;
 	const char* textures_path;
 	const char* lights_path;
+
 	if (get_scene_file(scene_spec->scene_file, NULL, &scene_path, &textures_path, &lights_path, NULL)) {
 		printf("Failed to load the scene, because the requested scene file is unknown.\n");
 		return 1;
 	}
+
 	// Load the spherical light file
 	FILE* file = fopen(lights_path, "rb");
 	if (file) {
@@ -789,15 +791,18 @@ int create_lit_scene(lit_scene_t* lit_scene, const device_t* device, const scene
 		printf("Loaded %u spherical lights from %s.\n", lit_scene->spherical_light_count, lights_path);
 		fclose(file);
 	}
+
 	// Figure out what suffixes go after material names to get texture names
+	// After load_scene returns
+	uint32_t* material_modes = malloc(sizeof(uint32_t) * lit_scene->scene.header.material_count);
+	build_material_color_modes(material_modes, &lit_scene->scene, settings);
+
+	// Generate texture suffixes based on material_modes
 	const char* suffixes[material_texture_type_count];
-	suffixes[material_texture_type_base_color] = "_BaseColor.vkt";
-	/*if (settings->color_model == color_model_spectral)
-	{
-		suffixes[material_texture_type_base_color] = "_BaseColorFourierSRGB.vkt";
-	}*/
+	suffixes[material_texture_type_base_color] = (settings->color_model == color_model_spectral) ? "_BaseColorFourierSRGB.vkt" : "_BaseColor.vkt";
 	suffixes[material_texture_type_specular] = "_Specular.vkt";
 	suffixes[material_texture_type_normal] = "_Normal.vkt";
+
 	// Load the scene
 	int result = load_scene(&lit_scene->scene, device, scene_path, textures_path, suffixes);
 	if (!result)
@@ -817,25 +822,6 @@ int create_lit_scene(lit_scene_t* lit_scene, const device_t* device, const scene
 	{
 		printf("Failed to create material metadata buffer.\n");
 		return 1;
-	}
-
-	uint32_t* material_modes = malloc(sizeof(uint32_t) * lit_scene->scene.header.material_count);
-
-	for (uint32_t i = 0; i < lit_scene->scene.header.material_count; ++i) 
-	{
-		bool is_dispersive = strstr(lit_scene->scene.header.material_names[i], "glass") ||
-			strstr(lit_scene->scene.header.material_names[i], "prism");
-
-		if (settings->color_model == color_model_hybrid) 
-		{
-			material_modes[i] =
-				is_dispersive ? material_color_spectral : material_color_rgb;
-		}
-		else 
-		{
-			material_modes[i] = (settings->color_model == color_model_spectral)
-				? material_color_spectral : material_color_rgb;
-		}
 	}
 
 	material_upload_ctx_t upload_ctx = {
@@ -1107,7 +1093,7 @@ int create_scene_subpass(scene_subpass_t* subpass, const device_t* device, const
 		.sampler = subpass->spectra_sampler,
 	};
 	VkDescriptorBufferInfo material_color_mode_info = {
-		.buffer = scene->material_metadata.buffers,
+		.buffer = scene->material_metadata.buffers[0].buffer,
 		.offset = 0,
 		.range = VK_WHOLE_SIZE,
 	};
@@ -1728,6 +1714,15 @@ int update_app(app_t* app, const app_update_t* update, bool recreate) {
 	// Let all GPU work finish before destroying objects it may rely on
 	if (app->device.device)
 		vkDeviceWaitIdle(app->device.device);
+
+	if (update->material_metadata) {
+		update_material_color_modes(
+			&app->lit_scene,
+			&app->device,
+			&app->render_settings
+		);
+	}
+
 	// Propagate dependencies
 	for (uint32_t i = 0; i != sizeof(app_update_t) / sizeof(bool); ++i) {
 		up.gui |= up.device | up.window;		
@@ -2073,6 +2068,7 @@ void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, re
 		uint32_t old_id = scene_spec->emission_material_spectrum_id;
 		nk_property_int(ctx, "LSPDD ID:", 2469, (int*) &scene_spec->emission_material_spectrum_id, 2801, 1, 0.01);
 		nk_label(ctx, illuminant_spectrum->name, NK_TEXT_ALIGN_LEFT);
+
 		// The way in which color is being handled
 		nk_layout_row_dynamic(ctx, 30, 1);
 		nk_label(ctx, "Color model", NK_TEXT_ALIGN_LEFT);
@@ -2081,9 +2077,12 @@ void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, re
 		color_models[color_model_spectral] = "Spectral";
 		color_models[color_model_hybrid] = "Hybrid";
 		color_model_t new_color_model = nk_combo(ctx, color_models, COUNT_OF(color_models), render_settings->color_model, 30, (struct nk_vec2) { .x = 240.0f, .y = 180.0f });
-		if (new_color_model != render_settings->color_model)
-			update->lit_scene = update->scene_subpass = true;
-		render_settings->color_model = new_color_model;
+		if (new_color_model != render_settings->color_model) 
+		{
+			render_settings->color_model = new_color_model;
+			update->material_metadata = true;
+		}
+
 		// The number samples for integration in the wavelength domain
 		nk_layout_row_dynamic(ctx, 30, 1);
 		int new_wavelength_sample_count = (int) render_settings->wavelength_sample_count;
@@ -2547,6 +2546,52 @@ void write_material_metadata(void* buffer_data, uint32_t buffer_index, VkDeviceS
 {
 	const material_upload_ctx_t* ctx = context;
 	memcpy(buffer_data, ctx->data, buffer_size);
+}
+
+
+void build_material_color_modes(uint32_t* material_modes, const scene_t* scene, const render_settings_t* settings)
+{
+	for (uint32_t i = 0; i < scene->header.material_count; ++i) 
+	{
+		bool is_dispersive =
+			strstr(scene->header.material_names[i], "glass") ||
+			strstr(scene->header.material_names[i], "prism");
+
+		if (settings->color_model == color_model_hybrid) 
+		{
+			material_modes[i] = is_dispersive ?
+				material_color_spectral :
+				material_color_rgb;
+		}
+		else if (settings->color_model == color_model_spectral) 
+		{
+			material_modes[i] = material_color_spectral;
+		}
+		else 
+		{
+			material_modes[i] = material_color_rgb;
+		}
+
+		printf("Material %u (%s) color model = %u\n",
+			i,
+			scene->header.material_names[i],
+			material_modes[i]);
+	}
+}
+
+
+void update_material_color_modes(lit_scene_t* lit_scene, const device_t* device, const render_settings_t* settings)
+{
+	uint32_t* material_modes = malloc(sizeof(uint32_t) * lit_scene->scene.header.material_count);
+
+	build_material_color_modes(material_modes, &lit_scene->scene, settings);
+
+	material_upload_ctx_t upload_ctx = {
+		.data = material_modes
+	};
+
+	fill_buffers(&lit_scene->scene.material_metadata, device, &write_material_metadata, &upload_ctx);
+	free(material_modes);
 }
 
 
