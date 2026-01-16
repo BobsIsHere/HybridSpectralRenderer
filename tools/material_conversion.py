@@ -21,6 +21,33 @@ from subprocess import Popen
 import re
 from time import sleep
 
+import sys
+import subprocess
+
+# 1. TELL BLENDER TO LOOK IN THE "USER" FOLDER
+# This is the path where your logs said imageio was found
+user_site_packages = r"C:/Users/marit/AppData/Roaming/Python/Python311/site-packages"
+if user_site_packages not in sys.path:
+    sys.path.append(user_site_packages)
+
+# 2. ATTEMPT TO INSTALL (just in case)
+python_exe = sys.executable
+try:
+    subprocess.check_call([python_exe, "-m", "pip", "install", "imageio"])
+except:
+    pass
+
+# 3. NOW TRY TO IMPORT
+try:
+    import imageio.v2 as imageio
+    print("SUCCESS: imageio found via User path!")
+except ImportError:
+    try:
+        import imageio
+        print("SUCCESS: imageio (standard) found!")
+    except ImportError:
+        print("ERROR: Still cannot find imageio. Ensure the path above is correct.")
+
 
 def linear_to_srgb(linear):
     """
@@ -89,7 +116,7 @@ def complete_materials(directory, material_dict):
                 print("Created %s." % texture_path)
 
 
-def convert_materials(destination_directory, source_directory, skip_existing=True, texture_conversion_path="texture_conversion/build/texture_conversion"):
+def convert_materials(destination_directory, source_directory, skip_existing=True, texture_conversion_path="C:/GitHubFiles/GradWork/HybridSpectralRenderer/tools/texture_conversion/out/build/x64-Debug/texture_conversion.exe"):
     """
     This function performs batch conversion of textures from a common file
     format (anything supported by stb_image) into the file format of the
@@ -149,3 +176,20 @@ def convert_materials(destination_directory, source_directory, skip_existing=Tru
                 task[3] = Popen(args)
                 launched_count += 1
         sleep(0.1)
+
+if __name__ == "__main__":
+    # 1. Path to your existing textures (PNG, JPG)
+    # Use 'r' before the quotes to prevent path errors
+    src_folder = r"C:/GitHubFiles/GradWork/HybridSpectralRenderer/data/testscene_textures"
+    
+    # 2. Path where you want the new .vkt files to go
+    dest_folder = r"C:/GitHubFiles/GradWork/HybridSpectralRenderer/data/testscene_textures"
+
+    # 3. Create missing textures (so the renderer doesn't crash)
+    # The {} is for special material overrides; leave it empty for defaults
+    complete_materials(src_folder, {})
+
+    # 4. Run the actual conversion to .vkt
+    convert_materials(dest_folder, src_folder)
+    
+    print("--- CONVERSION COMPLETE ---")
