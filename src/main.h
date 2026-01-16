@@ -31,6 +31,7 @@ typedef enum {
 	scene_file_bistro_inside,
 	scene_file_living_room_day,
 	scene_file_living_room_night,
+	scene_file_test,
 	//! Number of different scenes
 	scene_file_count,
 } scene_file_t;

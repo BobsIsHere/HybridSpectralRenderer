@@ -76,6 +76,13 @@ int get_scene_file(scene_file_t scene_file, const char** scene_name, const char*
 			lights = "data/living_room_night.lights";
 			save = "data/saves/living_room/night.rt_save";
 			break;
+		case scene_file_test:
+			name = "Test Scene";
+			file = "data/testscene.vks";
+			textures = "data/testscene_textures";
+			lights = "data/testscene.lights";
+			save = "data/saves/test_scene/default.rt_save";
+			break;
 		default:
 			break;
 	}
@@ -86,7 +93,6 @@ int get_scene_file(scene_file_t scene_file, const char** scene_name, const char*
 	if (quicksave_path) (*quicksave_path) = save;
 	return !name || !file || !textures || !lights || !save;
 }
-
 
 
 int quicksave(const scene_spec_t* spec) {
