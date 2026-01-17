@@ -1,5 +1,6 @@
 #pragma once
 #include <stdbool.h>
+#include <stdint.h>
 
 
 //! Forward declaration to be able to access mouse and keyboard input
@@ -89,3 +90,6 @@ void get_view_to_projection_space(float view_to_projection[4 * 4], const camera_
 	\param camera The camera for which to construct the transform.
 	\param aspect_ratio The ratio of viewport width over viewport height.*/
 void get_world_to_projection_space(float world_to_projection[4 * 4], const camera_t* camera, float aspect_ratio);
+
+void reset_camera(camera_t* camera);
+void perform_automated_camera_movement(camera_t* camera, uint32_t current_frame, uint32_t total_frames);

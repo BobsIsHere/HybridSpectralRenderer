@@ -165,3 +165,29 @@ void get_world_to_projection_space(float world_to_projection[4 * 4], const camer
 	get_view_to_projection_space(view_to_projection, camera, aspect_ratio);
 	mat_mat_mul(world_to_projection, view_to_projection, world_to_view, 4, 4, 4);
 }
+
+const float START_POS[3] = { 0.f, 0.f, 0.f };
+const float END_POS[3] = { 0.f, -4.f, 0.f };
+const float START_ANGLES[3] = { M_PI / 2.f, 0.f, 0.f };
+
+void reset_camera(camera_t* camera) 
+{
+	for (int i = 0; i < 3; i++) 
+	{
+		camera->position[i] = START_POS[i];
+		camera->rotation.angles[i] = START_ANGLES[i];
+	}
+	camera->rotation.mouse_active = false;
+}
+
+void perform_automated_camera_movement(camera_t* camera, uint32_t current_frame, uint32_t total_frames) 
+{
+	float t = (float)current_frame / (float)total_frames;
+
+	camera->position[0] = 0.f;
+	camera->position[1] = START_POS[1] + t * (END_POS[1] - START_POS[1]);
+	camera->position[2] = 1.5f;
+
+	camera->rotation.angles[0] = M_PI / 2.f;
+	camera->rotation.angles[2] = 0.f;
+}

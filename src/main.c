@@ -11,6 +11,7 @@
 #include <math.h>
 #include <io.h>
 #include <time.h>
+#include <locale.h>
 
 
 int get_scene_file(scene_file_t scene_file, const char** scene_name, const char** scene_file_path, const char** texture_path, const char** light_path, const char** quicksave_path) {
@@ -1864,14 +1865,52 @@ int handle_user_input(app_t* app, app_update_t* update) {
 		update->lit_scene = update->scene_subpass = true;
 	}
 	// Take screenshots
-	if (key_pressed(app->window, GLFW_KEY_F9))
-		save_screenshot("data/screenshot.pfm", image_file_format_pfm, &app->device, &app->render_targets, &app->scene_spec);
-	if (key_pressed(app->window, GLFW_KEY_F10))
-		save_screenshot("data/screenshot.hdr", image_file_format_hdr, &app->device, &app->render_targets, &app->scene_spec);
-	if (key_pressed(app->window, GLFW_KEY_F11))
-		save_screenshot("data/screenshot.png", image_file_format_png, &app->device, &app->render_targets, &app->scene_spec);
-	if (key_pressed(app->window, GLFW_KEY_F12))
-		save_screenshot("data/screenshot.jpg", image_file_format_jpg, &app->device, &app->render_targets, &app->scene_spec);
+	if (key_pressed(app->window, GLFW_KEY_F9) ||
+		key_pressed(app->window, GLFW_KEY_F10) ||
+		key_pressed(app->window, GLFW_KEY_F11) ||
+		key_pressed(app->window, GLFW_KEY_F12))
+	{
+		char filename[256];
+		const char* extension;
+		image_file_format_t format;
+
+		// Determine extension and format
+		if (key_pressed(app->window, GLFW_KEY_F9)) 
+		{ 
+			extension = ".pfm"; format = image_file_format_pfm; 
+		}
+		else if (key_pressed(app->window, GLFW_KEY_F10)) 
+		{ 
+			extension = ".hdr"; format = image_file_format_hdr; 
+		}
+		else if (key_pressed(app->window, GLFW_KEY_F11)) 
+		{ 
+			extension = ".png"; format = image_file_format_png; 
+		}
+		else 
+		{ 
+			extension = ".jpg"; format = image_file_format_jpg; 
+		}
+
+		// Determine color model string
+		const char* model_str = "";
+		if (app->render_settings.color_model == color_model_spectral) 
+		{
+			model_str = "spectral";
+		}
+		else if (app->render_settings.color_model == color_model_rgb) 
+		{
+			model_str = "rgb";
+		}
+		else if (app->render_settings.color_model == color_model_hybrid) 
+		{
+			model_str = "hybrid";
+		}
+
+		// Construct the filename: screens/screenshot_spectral.png
+		snprintf(filename, sizeof(filename), "screens/screenshot_%s%s", model_str, extension);
+		save_screenshot(filename, format, &app->device, &app->render_targets, &app->scene_spec);
+	}
 	// Slideshow controls
 	bool terminate = false;
 	if (app->slideshow.slide_begin < app->slideshow.slide_end) {
@@ -1951,25 +1990,54 @@ void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, re
 
 			if (!performance->active)
 			{
-				if (nk_button_label(ctx, "Start capture"))
+				if (nk_button_label(ctx, "Start Batch (30 Runs)"))
 				{
 					performance->frames_to_capture = (uint32_t)frames_to_capture;
 					performance->frame_count = 0;
+					performance->current_run = 0;
+					performance->total_runs_to_do = 30;
+					performance->batch_mode = true;
 					performance->active = true;
 
-					for (uint32_t i = 0; i < PERF_MAX_CAPTURE_FRAMES; ++i)
-					{
-						performance->frame_times[i] = 0.0f;
-						performance->shading_ms[i] = 0.0f;
-						performance->post_ms[i] = 0.0f;
-					}
+					reset_camera(&scene_spec->camera);
 				}
 			}
 			else
 			{
 				nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
-					"Capturing... (%u / %u)",
+					"Run %u / %u | Progress: (%u / %u)",
+					performance->current_run + 1, performance->total_runs_to_do,
 					performance->frame_count, performance->frames_to_capture);
+
+				perform_automated_camera_movement(&scene_spec->camera,
+					performance->frame_count,
+					performance->frames_to_capture);
+
+				performance->frame_count++;
+
+				// Check if THIS specific run is finished
+				if (performance->frame_count >= performance->frames_to_capture)
+				{
+					const char* scene_name = get_scene_name(scene_spec->scene_file);
+
+					// We pass the run number so the export function can create a unique filename
+					export_capture_to_csv(performance, scene_name);
+
+					performance->current_run++;
+
+					// Decide if we continue or stop
+					if (performance->batch_mode && performance->current_run < performance->total_runs_to_do)
+					{
+						performance->frame_count = 0; 
+						reset_camera(&scene_spec->camera);
+					}
+					else
+					{
+						performance->active = false;
+						performance->batch_mode = false;
+						reset_camera(&scene_spec->camera);
+					}
+				}
 			}
 
 			// Live rolling stats
@@ -2336,6 +2404,10 @@ VkResult render_frame(app_t* app, app_update_t* update) {
 		{
 			screenshot_path = "screens/screenshot_spectral.png";
 		}
+		else if (app->render_settings.color_model == color_model_hybrid)
+		{
+			screenshot_path = "screens/screenshot_hybrid.png";
+		}
 
 		save_screenshot(screenshot_path, image_file_format_png, device, &app->render_targets, &app->scene_spec);
 	}
@@ -2519,21 +2591,15 @@ void export_capture_to_csv(const performance_capture_t* capture, const char* sce
 		return;
 	}
 
-	// Add a timestamp header for this capture run
-	time_t now = time(NULL);
-	struct tm* local_time = localtime(&now);
-
-	fprintf(file, "\n# Capture run: %02d-%02d %02d:%02d:%02d\n",
-		local_time->tm_mday, local_time->tm_mon + 1,
-		local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
-
-	fprintf(file, "frame,frame_time_ms,shading_ms,post_ms\n");
+	char* saved_locale = setlocale(LC_NUMERIC, NULL);
+	setlocale(LC_NUMERIC, "de_DE");
 
 	for (uint32_t i = 0; i < capture->frame_count; ++i)
 	{
-		fprintf(file, "%u,%.6f,%.6f,%.6f\n",
-			i, capture->frame_times[i], capture->shading_ms[i], capture->post_ms[i]);
+		fprintf(file, "%u;%.6f;%.6f;%.6f\n", i, capture->frame_times[i], capture->shading_ms[i], capture->post_ms[i]);
 	}
+
+	setlocale(LC_NUMERIC, saved_locale);
 
 	fclose(file);
 	printf("Performance capture exported to: %s\n", path);

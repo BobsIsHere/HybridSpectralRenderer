@@ -16,7 +16,7 @@
 //! The maximal number of slides
 #define MAX_SLIDE_COUNT 100
 //! the amount of samples for taking a screenshot
-#define SCREENSHOT_SAMPLE_COUNT 1200
+#define SCREENSHOT_SAMPLE_COUNT 2000
 //! The maximal number of frames that can be captured for performance
 #define PERF_MAX_CAPTURE_FRAMES 300
 
@@ -444,6 +444,11 @@ typedef struct {
 	// GPU stage times (milliseconds)
 	float shading_ms[PERF_MAX_CAPTURE_FRAMES];
 	float post_ms[PERF_MAX_CAPTURE_FRAMES];
+
+	// Batch runs
+	uint32_t current_run;
+	uint32_t total_runs_to_do;
+	bool batch_mode;
 } performance_capture_t;
 
 
@@ -741,5 +746,6 @@ static const char* scene_file_names[scene_file_count] = {
 	[scene_file_attic] = "attic",
 	[scene_file_bistro_inside] = "bistro_inside",
 	[scene_file_living_room_day] = "living_room_day",
-	[scene_file_living_room_night] = "living_room_night"
+	[scene_file_living_room_night] = "living_room_night",
+	[scene_file_test] = "test_scene"
 };
