@@ -3,6 +3,11 @@ The core code of the path tracer can be found in src/shaders/pathtrace.frag.glsl
 Further pointers to code segments that are relevant for spectral rendering are provided in [part 2 of of the blog post series](SpectralRendering2Rendering.html#Links_to_relevant_code_sections).
 
 
+# Hybrid Renderer
+This branch explores the idea of implementing a renderer with an RGB pipeline and spectral pipeline at run time. 
+It part of my bachelor paper, Hybrid spectral-RGB rendering: a pipeline for real-time graphics applications.
+
+
 # Build instructions
 
 Dependencies of this project are GLFW 3.4 or newer and Vulkan 1.3.295 or newer and those have to be installed separately.
@@ -24,8 +29,7 @@ $ make
 
 # Run instructions
 
-If you want to see a scene other than the Cornell box, you must first make sure that you have all data files upon which the renderer depends.
-Several large files are not part of this repository and should instead be downloaded at the following link and added to the data directory.
+Other scenes than the cornel box are visible in the scene and were found here:
 https://momentsingraphics.de/Media/SpectralRendering/spectral_path_tracer_data.zip
 
 Then launch the path_tracer binary.
