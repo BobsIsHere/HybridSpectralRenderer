@@ -1990,14 +1990,16 @@ void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, re
 
 			if (!performance->active)
 			{
-				if (nk_button_label(ctx, "Start Batch (30 Runs)"))
+				if (nk_button_label(ctx, "Start Run"))
 				{
 					performance->frames_to_capture = (uint32_t)frames_to_capture;
 					performance->frame_count = 0;
 					performance->current_run = 0;
-					performance->total_runs_to_do = 30;
+					performance->total_runs_to_do = 10;
 					performance->batch_mode = true;
 					performance->active = true;
+
+					printf("Start capture: frames_to_capture=%u\n", performance->frames_to_capture);
 
 					reset_camera(&scene_spec->camera);
 				}
@@ -2005,39 +2007,38 @@ void define_gui(struct nk_context* ctx, app_t* app, scene_spec_t* scene_spec, re
 			else
 			{
 				nk_labelf(ctx, NK_TEXT_ALIGN_LEFT,
-					"Run %u / %u | Progress: (%u / %u)",
-					performance->current_run + 1, performance->total_runs_to_do,
+					"Progress: (%u / %u)",
 					performance->frame_count, performance->frames_to_capture);
 
 				perform_automated_camera_movement(&scene_spec->camera,
 					performance->frame_count,
 					performance->frames_to_capture);
 
-				performance->frame_count++;
+				//performance->frame_count++;
 
 				// Check if THIS specific run is finished
-				if (performance->frame_count >= performance->frames_to_capture)
-				{
-					const char* scene_name = get_scene_name(scene_spec->scene_file);
+				//if (performance->frame_count >= performance->frames_to_capture)
+				//{
+				//	const char* scene_name = get_scene_name(scene_spec->scene_file);
 
-					// We pass the run number so the export function can create a unique filename
-					export_capture_to_csv(performance, scene_name);
+				//	// We pass the run number so the export function can create a unique filename
+				//	export_capture_to_csv(performance, scene_name);
 
-					performance->current_run++;
+				//	performance->current_run++;
 
-					// Decide if we continue or stop
-					if (performance->batch_mode && performance->current_run < performance->total_runs_to_do)
-					{
-						performance->frame_count = 0; 
-						reset_camera(&scene_spec->camera);
-					}
-					else
-					{
-						performance->active = false;
-						performance->batch_mode = false;
-						reset_camera(&scene_spec->camera);
-					}
-				}
+				//	// Decide if we continue or stop
+				//	if (performance->batch_mode && performance->current_run < performance->total_runs_to_do)
+				//	{
+				//		performance->frame_count = 0; 
+				//		reset_camera(&scene_spec->camera);
+				//	}
+				//	else
+				//	{
+				//		performance->active = false;
+				//		performance->batch_mode = false;
+				//		reset_camera(&scene_spec->camera);
+				//	}
+				//}
 			}
 
 			// Live rolling stats
